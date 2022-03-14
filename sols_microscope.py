@@ -20,8 +20,9 @@ try:
     import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
     import concurrency_tools as ct              # github.com/AndrewGYork/tools
     from napari_in_subprocess import display    # github.com/AndrewGYork/tools
-except:
+except Exception as e:
     print('sols_microscope.py -> One or more imports failed')
+    print('sols_microscope.py -> error =',e)
 
 # SOLS optical configuration (edit as needed):
 M1 = 200 / 2; Mscan = 70 / 70; M2 = 5 / 357; M3 = 200 / 5
