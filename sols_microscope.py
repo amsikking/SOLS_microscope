@@ -11,14 +11,17 @@ from scipy.ndimage import zoom, rotate, gaussian_filter1d
 from tifffile import imread, imwrite
 
 # Our code, one .py file per module, copy files to your local directory:
-import pco_edge42_cl        # github.com/amsikking/pco_edge42_cl
-import ni_PXIe_6739         # github.com/amsikking/ni_PXIe_6739
-import sutter_Lambda_10_3   # github.com/amsikking/sutter_Lambda_10_3
-import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
-import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
-import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
-import concurrency_tools as ct              # github.com/AndrewGYork/tools
-from napari_in_subprocess import display    # github.com/AndrewGYork/tools
+try:
+    import pco_edge42_cl        # github.com/amsikking/pco_edge42_cl
+    import ni_PXIe_6739         # github.com/amsikking/ni_PXIe_6739
+    import sutter_Lambda_10_3   # github.com/amsikking/sutter_Lambda_10_3
+    import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
+    import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
+    import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
+    import concurrency_tools as ct              # github.com/AndrewGYork/tools
+    from napari_in_subprocess import display    # github.com/AndrewGYork/tools
+except:
+    print('sols_microscope.py -> One or more imports failed')
 
 # SOLS optical configuration (edit as needed):
 M1 = 200 / 2; Mscan = 70 / 70; M2 = 5 / 357; M3 = 200 / 5
