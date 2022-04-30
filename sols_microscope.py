@@ -211,6 +211,9 @@ class Microscope:
                       n2c[channel + '_power']] = 4.5 * power / 100
                     voltages.append(v)
         voltages = np.concatenate(voltages, axis=0)
+        # Timing attributes:
+        self.buffer_time_s = self.ao.p2s(voltages.shape[0])
+        self.volumes_per_s = self.volumes_per_buffer / self.buffer_time_s
         return voltages
 
     def _plot_voltages(self):
@@ -260,6 +263,8 @@ class Microscope:
             'power_per_channel':self.power_per_channel,
             'filter_wheel_position':self.filter_wheel_position,
             'illumination_time_us':self.illumination_time_us,
+            'volumes_per_s':self.volumes_per_s,
+            'buffer_time_s':self.buffer_time_s,
             'height_px':self.height_px,
             'width_px':self.width_px,
             'timestamp_mode':self.timestamp_mode,
@@ -309,7 +314,7 @@ class Microscope:
         assert isinstance(shared_numpy_array, ct.SharedNDArray)
         self.num_active_preview_buffers -= 1
 
-    def apply_settings( # Must call before .acuire()
+    def apply_settings( # Must call before .acquire()
         self,
         channels_per_slice=None,    # Tuple of strings
         power_per_channel=None,     # Tuple of floats
