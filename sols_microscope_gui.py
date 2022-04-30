@@ -463,18 +463,11 @@ class GuiAcquisition:
             data_gb + preview_gb) * self.acquisitions.spinbox_value
         print('Total storaged needed (GB) = %0.6f'%total_storage_gb)
         # calculate time:
-        period_us = (self.scope.camera.exposure_us +
-                     self.scope.camera.rolling_time_us + 30) # (29us jitter)
-        slice_time_s = 1e-6 * period_us * len(self.channels_per_slice)
-        volume_time_s = slice_time_s * self.scope.slices_per_volume       
-        buffer_time_s = volume_time_s * self.volumes.spinbox_value
-        self.total_acquire_time_s = (
-            buffer_time_s + self.delay_s.spinbox_value) * (
-                self.acquisitions.spinbox_value)
+        acquire_time_s = self.scope.buffer_time_s + self.delay_s.spinbox_value
+        total_time_s = acquire_time_s * self.acquisitions.spinbox_value
         print('Total acquisition time (s) = %0.6f (%0.2f min)'%(
-            self.total_acquire_time_s, (self.total_acquire_time_s / 60)))
-        vps = 1/volume_time_s
-        print('Vps ~ %0.6f'%vps)
+            total_time_s, (total_time_s / 60)))
+        print('Vps ~ %0.6f'%self.scope.volumes_per_s)
         return None
 
     def close(self):
