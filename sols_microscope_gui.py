@@ -322,14 +322,14 @@ class GuiAcquisition:
             width=self.spinbox_width)
 
     def init_apply_settings_and_print_button(self):
-        calculate_memory_and_time_button = tk.Button(
+        apply_settings_and_print_button = tk.Button(
             self.frame,
             text="Print memory + time",
             command=self.apply_settings_and_print,
             width=self.button_width,
             height=self.button_height)
-        calculate_memory_and_time_button.bind('<Enter>', self.get_tkfocus)
-        calculate_memory_and_time_button.grid(row=7, column=0, padx=10, pady=10)
+        apply_settings_and_print_button.bind('<Enter>', self.get_tkfocus)
+        apply_settings_and_print_button.grid(row=7, column=0, padx=10, pady=10)
 
     def apply_settings_and_print(self):
         self.apply_settings(_print=True)
