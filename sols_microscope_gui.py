@@ -328,6 +328,7 @@ class GuiAcquisition:
             command=self.apply_settings_and_print,
             width=self.button_width,
             height=self.button_height)
+        calculate_memory_and_time_button.bind('<Enter>', self.get_tkfocus)
         calculate_memory_and_time_button.grid(row=7, column=0, padx=10, pady=10)
 
     def apply_settings_and_print(self):
@@ -352,6 +353,7 @@ class GuiAcquisition:
                                           command=self.run_acquisition,
                                           width=self.button_width,
                                           height=self.button_height)
+        run_aquisition_button.bind('<Enter>', self.get_tkfocus)
         run_aquisition_button.grid(row=10, column=0, padx=10, pady=10)
 
     def run_acquisition(self):
