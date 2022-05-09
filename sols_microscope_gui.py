@@ -206,7 +206,7 @@ class GuiAcquisition:
         self.frame.focus_set()      # take from other widgets to force update
 
     def loop_snoutfocus(self):
-        self.scope.snoutfocus()
+        if not self.running_aquisition.get(): self.scope.snoutfocus()
         self.frame.after(120000, self.loop_snoutfocus)
 
     def init_live_mode_button(self):
@@ -349,6 +349,7 @@ class GuiAcquisition:
                                           width=self.spinbox_width)
 
     def init_run_aquisition_button(self):
+        self.running_aquisition = tk.BooleanVar()
         run_aquisition_button = tk.Button(self.frame, text="Run aquisition",
                                           command=self.run_acquisition,
                                           width=self.button_width,
@@ -359,13 +360,21 @@ class GuiAcquisition:
     def run_acquisition(self):
         if self.live_mode_enabled.get(): self.live_mode_enabled.set(0)
         if self.scout_mode_enabled.get(): self.scout_mode_enabled.set(0)
+        self.running_aquisition.set(1)
         self.apply_settings(_print=True)
         folder_name = self.get_folder_name()
         for i in range(self.acquisitions.spinbox_value):
-            self.scope.acquire(filename='%06i.tif'%i,
-                               folder_name=folder_name,
-                               description=self.description.text,
-                               delay_s=self.delay_s.spinbox_value)
+            if i == 0: # avoid first delay_s
+                self.scope.acquire(filename='%06i.tif'%i,
+                   folder_name=folder_name,
+                   description=self.description.text)
+            else:
+                self.scope.acquire(filename='%06i.tif'%i,
+                                   folder_name=folder_name,
+                                   description=self.description.text,
+                                   delay_s=self.delay_s.spinbox_value)
+        self.scope.finish_all_tasks()
+        self.running_aquisition.set(0)
 
     def get_folder_name(self):
         dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
