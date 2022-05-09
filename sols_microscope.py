@@ -548,9 +548,10 @@ class Microscope:
                 description=None,   # Optional metadata description
                 delay_s=None,       # Optional time delay baked in + Snoutfocus
                 display=True):      # Optional turn off
+        delay_during_acquire = True # default apply delay_s during acquire task
         if delay_s is not None and delay_s > 3:
             self.snoutfocus(delay_s=delay_s) # Run snoutfocus for longer delays
-            delay_s = None
+            delay_during_acquire = False # snoutfocus will apply the delay_s
         def acquire_task(custody):
             custody.switch_from(None, to=self.camera) # get camera
             if not self._settings_applied:
@@ -559,7 +560,7 @@ class Microscope:
                 print("%s: (all arguments must be specified at least once)")
                 custody.switch_from(self.camera, to=None)
                 return
-            if delay_s is not None:
+            if delay_during_acquire and delay_s is not None:
                 time.sleep(delay_s) # simple but not 'us' precise
             if filename is not None:
                 prepare_to_save_thread = ct.ResultThread(
