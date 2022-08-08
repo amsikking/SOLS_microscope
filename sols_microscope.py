@@ -362,7 +362,7 @@ class Microscope:
             if memory_exceeded:
                 custody.switch_from(self.camera, to=None)
                 return
-            # Send hardware commands, slowest to fastest:
+            # Send hardware commands, slowest to fastest:            
             if XY_stage_position_mm is not None:
                 assert XY_stage_position_mm[2] in ('relative', 'absolute')
                 x, y = XY_stage_position_mm[0], XY_stage_position_mm[1]
@@ -370,6 +370,9 @@ class Microscope:
                     self.XY_stage.move_mm(x, y, block=False)
                 if XY_stage_position_mm[2] == 'absolute':
                     self.XY_stage.move_mm(x, y, relative=False, block=False)
+            else: # must update XY stage attributes if joystick was used
+                update_XY_stage_position_thread = ct.ResultThread(
+                    target=self.XY_stage.get_position_mm).start()
             if filter_wheel_position is not None:
                 self.filter_wheel.move(filter_wheel_position,
                                        speed=6,
@@ -419,6 +422,9 @@ class Microscope:
                 self.filter_wheel._finish_moving()
             if XY_stage_position_mm is not None:
                 self.XY_stage._finish_moving()
+                self.XY_stage_position_mm = self.XY_stage.x, self.XY_stage.y
+            else:
+                update_XY_stage_position_thread.get_result()
                 self.XY_stage_position_mm = self.XY_stage.x, self.XY_stage.y
             if check_write_voltages_thread:
                 write_voltages_thread.get_result()
@@ -562,6 +568,9 @@ class Microscope:
                 return
             if delay_during_acquire and delay_s is not None:
                 time.sleep(delay_s) # simple but not 'us' precise
+            # must update XY stage position attributes in case joystick was used
+            # no thread (blocking) so metatdata in _prepare_to_save is current
+            self.XY_stage_position_mm = self.XY_stage.get_position_mm()
             if filename is not None:
                 prepare_to_save_thread = ct.ResultThread(
                     target=self._prepare_to_save,
