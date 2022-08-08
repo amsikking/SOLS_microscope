@@ -198,6 +198,11 @@ class GuiAcquisition:
         # update attributes from hardware: (no xyz moves from init)
         self.focus_piezo_z_um = self.scope.focus_piezo_z_um
         self.XY_stage_position_mm = self.scope.XY_stage_position_mm
+        # get XY stage limits for feedback in scout mode:
+        self.XY_stage_x_min = self.scope.XY_stage.x_min
+        self.XY_stage_y_min = self.scope.XY_stage.y_min
+        self.XY_stage_x_max = self.scope.XY_stage.x_max
+        self.XY_stage_y_max = self.scope.XY_stage.y_max
         # get scope ready:
         self.loop_snoutfocus()
         self.scope.acquire()
@@ -243,20 +248,38 @@ class GuiAcquisition:
 
     def init_scout_mode(self):
         self.live_mode_enabled.set(0)
-        self.apply_settings(single_volume=True)
-        self.scope.acquire()
         self.run_scout_mode()
 
     def run_scout_mode(self):
         if self.scout_mode_enabled.get():
-            XY_pos_mm = self.scope.XY_stage.get_position_mm()
+            # Check Z:
             Z_pos_um = gui_focus_piezo.position_um.spinbox_value
-            if (abs(XY_pos_mm[0] - self.XY_stage_position_mm[0]) > 0.005 or
-                abs(XY_pos_mm[1] - self.XY_stage_position_mm[1]) > 0.005 or
-                Z_pos_um != self.focus_piezo_z_um):
-                self.XY_stage_position_mm = XY_pos_mm
+            if Z_pos_um != self.focus_piezo_z_um:
                 self.apply_settings(single_volume=True)
                 self.scope.acquire()
+            # Check XY:
+            self.scope.apply_settings().join() # update XY stage attribute
+            XY_pos_mm = self.scope.XY_stage_position_mm
+            if (abs(XY_pos_mm[0] - self.XY_stage_position_mm[0]) > 0.005 or
+                abs(XY_pos_mm[1] - self.XY_stage_position_mm[1]) > 0.005):
+                self.apply_settings(single_volume=True)
+                self.scope.acquire()
+                self.XY_stage_position_mm = XY_pos_mm
+                moving = False
+                if XY_pos_mm[0] == self.XY_stage_x_min:
+                    print('XY_stage: moving -X')
+                    moving = True
+                if XY_pos_mm[0] == self.XY_stage_x_max:
+                    print('XY_stage: moving +X')
+                    moving = True
+                if XY_pos_mm[1] == self.XY_stage_y_min:
+                    print('XY_stage: moving -Y')
+                    moving = True
+                if XY_pos_mm[1] == self.XY_stage_y_max:
+                    print('XY_stage: moving +Y')
+                    moving = True
+                if not moving:
+                    print('XY_stage:', XY_pos_mm)
             self.frame.after(self.gui_delay_ms, self.run_scout_mode)
 
     def init_snap_button(self):
