@@ -18,6 +18,7 @@ try:
     import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
     import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
     import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
+    import shm_win_patch        # github.com/amsikking/shm_win_patch
     import concurrency_tools as ct              # github.com/AndrewGYork/tools
     from napari_in_subprocess import display    # github.com/AndrewGYork/tools
 except Exception as e:
