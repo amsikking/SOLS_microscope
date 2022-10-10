@@ -230,7 +230,8 @@ class Microscope:
         plt.xlabel('Seconds')
         plt.show()
 
-    def _prepare_to_save(self, filename, folder_name, description, delay_s):
+    def _prepare_to_save(
+        self, filename, folder_name, description, delay_s, preview_only):
         def make_folders(folder_name):
             os.makedirs(folder_name)
             os.makedirs(folder_name + '\data')
@@ -250,16 +251,15 @@ class Microscope:
         data_path =     folder_name + '\data\\'     + filename
         metadata_path = folder_name + '\metadata\\' + filename
         preview_path =  folder_name + '\preview\\'  + filename
-        self._save_metadata(filename, description, delay_s, metadata_path)
-        return data_path, preview_path
-
-    def _save_metadata(self, filename, description, delay_s, path):
+        # save metadata:
         to_save = {
             'Date':datetime.strftime(datetime.now(),'%Y-%m-%d'),
             'Time':datetime.strftime(datetime.now(),'%H:%M:%S'),
             'filename':filename,
+            'folder_name':folder_name,
             'description':description,
             'delay_s':delay_s,
+            'preview_only':preview_only,
             'channels_per_slice':tuple(self.channels_per_slice),
             'power_per_channel':tuple(self.power_per_channel),
             'filter_wheel_position':self.filter_wheel_position,
@@ -285,9 +285,10 @@ class Microscope:
             'voxel_aspect_ratio':calculate_voxel_aspect_ratio(
                 self.scan_step_size_px),
             }
-        with open(os.path.splitext(path)[0] + '.txt', 'w') as file:
+        with open(os.path.splitext(metadata_path)[0] + '.txt', 'w') as file:
             for k, v in to_save.items():
                 file.write(k + ': ' + str(v) + '\n')
+        return data_path, preview_path
 
     def _get_data_buffer(self, shape, dtype):
         while self.num_active_data_buffers >= self.max_data_buffers:
@@ -554,7 +555,8 @@ class Microscope:
                 folder_name=None,   # None = new folder, same string = re-use
                 description=None,   # Optional metadata description
                 delay_s=None,       # Optional time delay baked in + Snoutfocus
-                display=True):      # Optional turn off
+                display=True,       # Optional turn off
+                preview_only=False):# Save preview only, raw data discarded
         delay_during_acquire = True # default apply delay_s during acquire task
         if delay_s is not None and delay_s > 3:
             self.snoutfocus(delay_s=delay_s) # Run snoutfocus for longer delays
@@ -575,7 +577,11 @@ class Microscope:
             if filename is not None:
                 prepare_to_save_thread = ct.ResultThread(
                     target=self._prepare_to_save,
-                    args=(filename, folder_name, description, delay_s)).start()
+                    args=(filename,
+                          folder_name,
+                          description,
+                          delay_s,
+                          preview_only)).start()
             # We have custody of the camera so attribute access is safe:
             vo   = self.volumes_per_buffer
             sl   = self.slices_per_volume
@@ -624,7 +630,8 @@ class Microscope:
                     print("%s: saving '%s'"%(self.name, data_path))
                     print("%s: saving '%s'"%(self.name, preview_path))
                 # TODO: consider puting FileSaving in a SubProcess
-                imwrite(data_path, data_buffer, imagej=True)
+                if not preview_only:
+                    imwrite(data_path, data_buffer, imagej=True)
                 imwrite(preview_path, preview_buffer, imagej=True)
                 if self.verbose:
                     print("%s: done saving."%self.name)
@@ -974,6 +981,7 @@ if __name__ == '__main__':
             description='something...',
             delay_s=0,
             display=True,
+            preview_only=False,
             )
     scope.close()
 
