@@ -65,12 +65,16 @@ if __name__ == '__main__': # required block for sols_microscope
             first_z_um = dataz.estimate(first_preview,
                                         scope.height_px,
                                         scope.width_px,
-                                        scope.preview_line_px)
+                                        scope.preview_line_px,
+                                        scope.preview_crop_px,
+                                        scope.timestamp_mode)
         last_preview = imread(folder_name + '\preview\\' + filename561)
         last_z_um = dataz.estimate(last_preview,
                                    scope.height_px,
                                    scope.width_px,
-                                   scope.preview_line_px)
+                                   scope.preview_line_px,
+                                   scope.preview_crop_px,
+                                   scope.timestamp_mode)
         z_change_um = last_z_um - first_z_um
         print('Sample z-axis change um:', z_change_um)
         scope.apply_settings(focus_piezo_z_um=(z_change_um, 'relative'))        
