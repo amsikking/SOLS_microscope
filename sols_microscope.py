@@ -333,7 +333,7 @@ class Microscope:
         max_bytes_per_buffer=None,  # Int
         max_data_buffers=None,      # Int
         max_preview_buffers=None,   # Int
-        preview_line_px=None, # Int
+        preview_line_px=None,       # Int
         ):
         args = locals()
         args.pop('self')
@@ -824,13 +824,10 @@ class DataZ:
         if method == 'max_intensity':
             max_z_intensity_um = np.argmax(intensity_line_smooth) * sample_px_um
             return max_z_intensity_um
-        max_intensity = np.max(intensity_line_smooth)
         intensity_gradient = np.zeros((len(intensity_line_smooth) - 1))
         for px in range(len(intensity_line_smooth) - 1):
             intensity_gradient[px] = (
                 intensity_line_smooth[px + 1] - intensity_line_smooth[px])
-            if intensity_line_smooth[px + 1] == max_intensity:
-                break
         max_z_gradient_um = np.argmax(intensity_gradient) * sample_px_um
         return max_z_gradient_um
 
