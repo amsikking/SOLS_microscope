@@ -1,5 +1,5 @@
 # SOLS_microscope
-Python control code for the original 'high NA single-objective light-sheet' microscope (SOLS): https://andrewgyork.github.io/high_na_single_objective_lightsheet/
+Python control code for the original 'high NA single-objective light-sheet' (SOLS) microscope: https://andrewgyork.github.io/high_na_single_objective_lightsheet/
 ## Quick start:
 - (see **'power_sequence'** folder for how to power up the microscope)
 - 'sols_microscope.py' contains the 'Microscope' class for running the original SOLS hardware and various 'data processing' methods for **converting raw data into more conventional formats**.
