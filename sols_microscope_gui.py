@@ -134,6 +134,9 @@ class GuiFocusPiezo:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='FOCUS PIEZO', bd=6)
         frame.grid(row=0, column=3, rowspan=2, padx=20, pady=20, sticky='n')
+        self.min_value = 0
+        self.max_value = 100
+        self.center_value = int(round((self.max_value - self.min_value) / 2))
         self.position_um = tki_cw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
@@ -141,10 +144,45 @@ class GuiFocusPiezo:
             checkbox_enabled=False,
             slider_length=400,
             tickinterval=10,
-            slider_flipped=True,
-            min_value=0,
-            max_value=100,
+            min_value=self.min_value,
+            max_value=self.max_value,
             default_value=gui_acquisition.focus_piezo_z_um)
+        # Convenience buttons:
+        self.button_width = 10
+        self.button_height = 2
+        self.button_up = tk.Button(frame, text="up (5um)",
+                                   command=self.move_up,
+                                   width=self.button_width,
+                                   height=self.button_height)
+        self.button_up.grid(row=1, column=0, padx=10, pady=10)
+        self.button_center = tk.Button(frame, text="center",
+                                       command=self.move_center,
+                                       width=self.button_width,
+                                       height=self.button_height)
+        self.button_center.grid(row=2, column=0, padx=10, pady=10)
+        self.button_down = tk.Button(frame, text="down (5um)",
+                                     command=self.move_down,
+                                     width=self.button_width,
+                                     height=self.button_height)
+        self.button_down.grid(row=3, column=0, padx=10, pady=10)
+
+    def move_up(self):
+        up_value = self.position_um.spinbox_value - 5
+        if self.min_value <= up_value <= self.max_value:
+            self.update_position_value(up_value)
+
+    def move_center(self):
+        self.update_position_value(self.center_value)
+
+    def move_down(self):
+        down_value = self.position_um.spinbox_value + 5
+        if self.min_value <= down_value <= self.max_value:
+            self.update_position_value(down_value)
+
+    def update_position_value(self, position_um):
+        self.position_um.tk_spinbox_value.set(position_um)
+        self.position_um.tk_slider_value.set(position_um)
+        self.position_um.spinbox_value = position_um
 
 class GuiAcquisition:
     def __init__(self, master):
