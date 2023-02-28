@@ -142,7 +142,6 @@ class GuiFocusPiezo:
             label='position (um)',
             orient='vertical',
             checkbox_enabled=False,
-            slider_length=400,
             tickinterval=10,
             min_value=self.min_value,
             max_value=self.max_value,
@@ -154,17 +153,17 @@ class GuiFocusPiezo:
                                    command=self.move_up,
                                    width=self.button_width,
                                    height=self.button_height)
-        self.button_up.grid(row=1, column=0, padx=10, pady=10)
+        self.button_up.grid(row=0, column=1, padx=10, pady=10, sticky='n')
         self.button_center = tk.Button(frame, text="center",
                                        command=self.move_center,
                                        width=self.button_width,
                                        height=self.button_height)
-        self.button_center.grid(row=2, column=0, padx=10, pady=10)
+        self.button_center.grid(row=0, column=1, padx=10, pady=10)
         self.button_down = tk.Button(frame, text="down (5um)",
                                      command=self.move_down,
                                      width=self.button_width,
                                      height=self.button_height)
-        self.button_down.grid(row=3, column=0, padx=10, pady=10)
+        self.button_down.grid(row=0, column=1, padx=10, pady=10, sticky='s')
 
     def move_up(self):
         up_value = self.position_um.spinbox_value - 5
@@ -183,6 +182,85 @@ class GuiFocusPiezo:
         self.position_um.tk_spinbox_value.set(position_um)
         self.position_um.tk_slider_value.set(position_um)
         self.position_um.spinbox_value = position_um
+
+class GuiXYStage:
+    def __init__(self, master):
+        frame = tk.LabelFrame(master, text='XY STAGE', bd=6)
+        frame.grid(row=1, column=3, padx=20, pady=20, sticky='s')
+        self.last_move = tki_cw.Textbox(
+            frame,
+            label='last move',
+            default_text='None',
+            height=1,
+            width=15)
+        self.last_move.grid(row=0, column=1, padx=10, pady=10)
+        self.position = tki_cw.Textbox(
+            frame,
+            label='position (mm)',
+            height=1,
+            width=20)
+        self.position.grid(row=2, column=1, padx=10, pady=10)
+        self.update_position(gui_acquisition.XY_stage_position_mm)
+        # Convenience buttons:
+        self.button_width = 10
+        self.button_height = 2
+        self.button_up = tk.Button(frame, text="up",
+                                   command=self.move_up,
+                                   width=self.button_width,
+                                   height=self.button_height)
+        self.button_up.grid(row=1, column=1, padx=10, pady=10)
+        self.move_up = False
+        self.button_down = tk.Button(frame, text="down",
+                                     command=self.move_down,
+                                     width=self.button_width,
+                                     height=self.button_height)
+        self.button_down.grid(row=3, column=1, padx=10, pady=10)
+        self.move_down = False
+        self.button_left = tk.Button(frame, text="left",
+                                   command=self.move_left,
+                                   width=self.button_width,
+                                   height=self.button_height)
+        self.button_left.grid(row=2, column=0, padx=10, pady=10)
+        self.move_left = False
+        self.button_right = tk.Button(frame, text="right",
+                                     command=self.move_right,
+                                     width=self.button_width,
+                                     height=self.button_height)
+        self.button_right.grid(row=2, column=3, padx=10, pady=10)
+        self.move_right = False
+        # Size of move:
+        self.step_size_pct = tki_cw.CheckboxSliderSpinbox(
+            frame,
+            label='step size (% of FOV)',
+            checkbox_enabled=False,
+            slider_length=250,
+            tickinterval=9,
+            min_value=5,
+            max_value=95,
+            default_value=95,
+            row=4,
+            columnspan=4)
+
+    def update_last_move(self, text):
+        self.last_move.textbox.delete('1.0', '10.0')
+        self.last_move.textbox.insert('1.0', text)
+
+    def update_position(self, position_mm):
+        self.position.textbox.delete('1.0', '10.0')
+        self.position.textbox.insert(
+                    '1.0', 'X=%0.3f, Y=%0.3f'%(position_mm[0], position_mm[1]))
+
+    def move_up(self):
+        self.move_up = True
+
+    def move_down(self):
+        self.move_down = True
+
+    def move_left(self):
+        self.move_left = True
+
+    def move_right(self):
+        self.move_right = True
 
 class GuiAcquisition:
     def __init__(self, master):
@@ -293,31 +371,55 @@ class GuiAcquisition:
             # Check Z:
             Z_pos_um = gui_focus_piezo.position_um.spinbox_value
             if Z_pos_um != self.focus_piezo_z_um:
-                self.apply_settings(single_volume=True)
-                self.scope.acquire()
+                self.snap_volume(_print=False)
             # Check XY:
-            self.scope.apply_settings().join() # update XY stage attribute
-            XY_pos_mm = self.scope.XY_stage_position_mm
-            if (abs(XY_pos_mm[0] - self.XY_stage_position_mm[0]) > 0.005 or
-                abs(XY_pos_mm[1] - self.XY_stage_position_mm[1]) > 0.005):
-                self.apply_settings(single_volume=True)
-                self.scope.acquire()
-                self.XY_stage_position_mm = XY_pos_mm
-                moving = False
-                if XY_pos_mm[0] == self.XY_stage_x_min:
-                    print('XY_stage: moving -X')
-                    moving = True
-                if XY_pos_mm[0] == self.XY_stage_x_max:
-                    print('XY_stage: moving +X')
-                    moving = True
-                if XY_pos_mm[1] == self.XY_stage_y_min:
-                    print('XY_stage: moving -Y')
-                    moving = True
-                if XY_pos_mm[1] == self.XY_stage_y_max:
-                    print('XY_stage: moving +Y')
-                    moving = True
-                if not moving:
-                    print('XY_stage:', XY_pos_mm)
+            # -> apply GUI move requests:
+            move_pct = gui_xy_stage.step_size_pct.spinbox_value / 100
+            self.scope.apply_settings().join() # update attributes
+            scan_width_um = self.scope.width_px * sols.sample_px_um
+            ud_move_mm = 1e-3 * self.scope.scan_range_um * move_pct
+            lr_move_mm = 1e-3 * scan_width_um * move_pct
+            if gui_xy_stage.move_up:
+                self.scope.apply_settings(
+                    XY_stage_position_mm=(0, ud_move_mm, 'relative'))
+                self.snap_volume(_print=False)
+                gui_xy_stage.update_last_move('up (+Y)')
+                gui_xy_stage.move_up = False
+            elif gui_xy_stage.move_down:
+                self.scope.apply_settings(
+                    XY_stage_position_mm=(0, -ud_move_mm, 'relative'))
+                self.snap_volume(_print=False)
+                gui_xy_stage.update_last_move('down (-Y)')
+                gui_xy_stage.move_down = False
+            elif gui_xy_stage.move_left:
+                self.scope.apply_settings(
+                    XY_stage_position_mm=(-lr_move_mm, 0, 'relative'))
+                self.snap_volume(_print=False)
+                gui_xy_stage.update_last_move('left (-X)')
+                gui_xy_stage.move_left = False
+            elif gui_xy_stage.move_right:
+                self.scope.apply_settings(
+                    XY_stage_position_mm=(lr_move_mm, 0, 'relative'))
+                self.snap_volume(_print=False)
+                gui_xy_stage.update_last_move('right (+X)')
+                gui_xy_stage.move_right = False
+            # -> check for joystick motion:
+            self.scope.apply_settings().join() # update attributes
+            self.XY_stage_position_mm = self.scope.XY_stage_position_mm
+            if self.XY_stage_position_mm[0]   == self.XY_stage_x_min: # moving
+                gui_xy_stage.update_last_move('left (-X)')
+                self.snap_volume(_print=False)
+            elif self.XY_stage_position_mm[0] == self.XY_stage_x_max: # moving
+                gui_xy_stage.update_last_move('right (+X)')
+                self.snap_volume(_print=False)
+            elif self.XY_stage_position_mm[1] == self.XY_stage_y_min: # moving
+                gui_xy_stage.update_last_move('down (-Y)')
+                self.snap_volume(_print=False)
+            elif self.XY_stage_position_mm[1] == self.XY_stage_y_max: # moving
+                gui_xy_stage.update_last_move('up (+Y)')
+                self.snap_volume(_print=False)
+            else:
+                gui_xy_stage.update_position(self.XY_stage_position_mm)          
             self.frame.after(self.gui_delay_ms, self.run_scout_mode)
 
     def init_snap_button(self):
@@ -327,8 +429,8 @@ class GuiAcquisition:
                                 height=self.button_height)
         snap_button.grid(row=2, column=0, padx=10, pady=10)
 
-    def snap_volume(self):
-        self.apply_settings(single_volume=True, _print=True)
+    def snap_volume(self, _print=True):
+        self.apply_settings(single_volume=True, _print=_print)
         self.scope.acquire()
 
     def init_snap_and_save_button(self):
@@ -481,7 +583,6 @@ class GuiAcquisition:
         scan_range_um = gui_galvo.scan_range_um.spinbox_value
         volumes_per_buffer=self.volumes.spinbox_value
         focus_piezo_z_um = gui_focus_piezo.position_um.spinbox_value
-        # (currently no XY stage GUI)
         if power_per_channel != self.power_per_channel:
             self.scope.apply_settings(
                 channels_per_slice=channels_per_slice,
@@ -556,6 +657,7 @@ if __name__ == '__main__':
     gui_camera =            GuiCamera(root)
     gui_acquisition =       GuiAcquisition(root)
     gui_focus_piezo =       GuiFocusPiezo(root)
+    gui_xy_stage =          GuiXYStage(root)
 
     quit_ = tk.Button(root, text="QUIT", command=root.quit, height=5, width=30)
     quit_.grid(row=3, column=4, padx=20, pady=20, sticky='n')
