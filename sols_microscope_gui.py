@@ -583,7 +583,8 @@ class GuiAcquisition:
         scan_range_um = gui_galvo.scan_range_um.spinbox_value
         volumes_per_buffer=self.volumes.spinbox_value
         focus_piezo_z_um = gui_focus_piezo.position_um.spinbox_value
-        if power_per_channel != self.power_per_channel:
+        if (power_per_channel != self.power_per_channel or
+            channels_per_slice != self.channels_per_slice):
             self.scope.apply_settings(
                 channels_per_slice=channels_per_slice,
                 power_per_channel=power_per_channel)
