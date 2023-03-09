@@ -373,6 +373,9 @@ class GuiAcquisition:
             if Z_pos_um != self.focus_piezo_z_um:
                 self.snap_volume(_print=False)
             # Check XY:
+            def snap_volume_and_update_gui(gui_text): # save lines of code
+                self.snap_volume(_print=False)
+                gui_xy_stage.update_last_move(gui_text)
             # -> apply GUI move requests:
             move_pct = gui_xy_stage.step_size_pct.spinbox_value / 100
             self.scope.apply_settings().join() # update attributes
@@ -382,44 +385,43 @@ class GuiAcquisition:
             if gui_xy_stage.move_up:
                 self.scope.apply_settings(
                     XY_stage_position_mm=(0, ud_move_mm, 'relative'))
-                self.snap_volume(_print=False)
-                gui_xy_stage.update_last_move('up (+Y)')
+                snap_volume_and_update_gui('up (+Y)')
                 gui_xy_stage.move_up = False
             elif gui_xy_stage.move_down:
                 self.scope.apply_settings(
                     XY_stage_position_mm=(0, -ud_move_mm, 'relative'))
-                self.snap_volume(_print=False)
-                gui_xy_stage.update_last_move('down (-Y)')
+                snap_volume_and_update_gui('down (-Y)')
                 gui_xy_stage.move_down = False
             elif gui_xy_stage.move_left:
                 self.scope.apply_settings(
                     XY_stage_position_mm=(-lr_move_mm, 0, 'relative'))
-                self.snap_volume(_print=False)
-                gui_xy_stage.update_last_move('left (-X)')
+                snap_volume_and_update_gui('left (-X)')
                 gui_xy_stage.move_left = False
             elif gui_xy_stage.move_right:
                 self.scope.apply_settings(
                     XY_stage_position_mm=(lr_move_mm, 0, 'relative'))
-                self.snap_volume(_print=False)
-                gui_xy_stage.update_last_move('right (+X)')
+                snap_volume_and_update_gui('right (+X)')
                 gui_xy_stage.move_right = False
             # -> check for joystick motion:
             self.scope.apply_settings().join() # update attributes
             self.XY_stage_position_mm = self.scope.XY_stage_position_mm
+            joystick_motion = False
             if self.XY_stage_position_mm[0]   == self.XY_stage_x_min: # moving
-                gui_xy_stage.update_last_move('left (-X)')
-                self.snap_volume(_print=False)
+                snap_volume_and_update_gui('left (-X)')
+                joystick_motion = True
             elif self.XY_stage_position_mm[0] == self.XY_stage_x_max: # moving
-                gui_xy_stage.update_last_move('right (+X)')
-                self.snap_volume(_print=False)
+                snap_volume_and_update_gui('right (+X)')
+                joystick_motion = True
             elif self.XY_stage_position_mm[1] == self.XY_stage_y_min: # moving
-                gui_xy_stage.update_last_move('down (-Y)')
-                self.snap_volume(_print=False)
+                snap_volume_and_update_gui('down (-Y)')
+                joystick_motion = True
             elif self.XY_stage_position_mm[1] == self.XY_stage_y_max: # moving
-                gui_xy_stage.update_last_move('up (+Y)')
-                self.snap_volume(_print=False)
-            else:
-                gui_xy_stage.update_position(self.XY_stage_position_mm)          
+                snap_volume_and_update_gui('up (+Y)')
+                joystick_motion = True
+            if joystick_motion: # snap again to reduce motion blur
+                self.snap_volume(_print=False) # consider .after to slow more
+            else: # update position in gui (avoids erroneous position updates)
+                gui_xy_stage.update_position(self.XY_stage_position_mm)
             self.frame.after(self.gui_delay_ms, self.run_scout_mode)
 
     def init_snap_button(self):
