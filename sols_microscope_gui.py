@@ -284,6 +284,7 @@ class GuiAcquisition:
         self.init_label_textbox()
         self.init_description_textbox()
         self.init_run_aquisition_button()
+        self.init_cancel_aquisition_button()
         # init scope:
         self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
         self.scope.XY_stage.set_velocity(5, 5) # edit for taste
@@ -297,7 +298,7 @@ class GuiAcquisition:
         self.width_px = gui_camera.width_px.spinbox_value
         self.voxel_aspect_ratio = gui_galvo.voxel_aspect_ratio.spinbox_value
         self.scan_range_um = gui_galvo.scan_range_um.spinbox_value
-        self.volumes_per_buffer = self.volumes.spinbox_value
+        self.volumes_per_buffer = self.volumes_spinbox.spinbox_value
         # apply GUI settings:
         self.scope.apply_settings( # Mandatory call
             channels_per_slice=self.channels_per_slice,
@@ -328,7 +329,8 @@ class GuiAcquisition:
 
     def loop_snoutfocus(self):
         if not self.running_aquisition.get(): self.scope.snoutfocus()
-        self.frame.after(120000, self.loop_snoutfocus)
+        wait_ms = int(round(5 * 60 * 1e3))
+        self.frame.after(wait_ms, self.loop_snoutfocus)
 
     def init_live_mode_button(self):
         self.live_mode_enabled = tk.BooleanVar()
@@ -448,10 +450,10 @@ class GuiAcquisition:
         folder_name = self.get_folder_name() + '_snap'
         self.scope.acquire(filename='snap.tif',
                            folder_name=folder_name,
-                           description=self.description.text)
+                           description=self.description_textbox.text)
 
     def init_volumes_spinbox(self):
-        self.volumes = tki_cw.CheckboxSliderSpinbox(
+        self.volumes_spinbox = tki_cw.CheckboxSliderSpinbox(
             self.frame,
             label='Volumes per acquisition',
             checkbox_enabled=False,
@@ -463,7 +465,7 @@ class GuiAcquisition:
             width=self.spinbox_width)
 
     def init_acquisitions_spinbox(self):
-        self.acquisitions = tki_cw.CheckboxSliderSpinbox(
+        self.acquisitions_spinbox = tki_cw.CheckboxSliderSpinbox(
             self.frame,
             label='Acquisition number',
             checkbox_enabled=False,
@@ -475,7 +477,7 @@ class GuiAcquisition:
             width=self.spinbox_width)
 
     def init_delay_spinbox(self):
-        self.delay_s = tki_cw.CheckboxSliderSpinbox(
+        self.delay_spinbox = tki_cw.CheckboxSliderSpinbox(
             self.frame,
             label='Inter-acquisition delay (s)',
             checkbox_enabled=False,
@@ -500,54 +502,82 @@ class GuiAcquisition:
         self.apply_settings(_print=True)
 
     def init_label_textbox(self):
-        self.label = tki_cw.Textbox(self.frame,
-                                    label='Folder label',
-                                    default_text='sols_gui',
-                                    row=8,
-                                    width=self.spinbox_width)
+        self.label_textbox = tki_cw.Textbox(self.frame,
+                                            label='Folder label',
+                                            default_text='sols_gui',
+                                            row=8,
+                                            width=self.spinbox_width)
 
     def init_description_textbox(self):
-        self.description = tki_cw.Textbox(self.frame,
-                                          label='Description',
-                                          default_text='what are you doing?',
-                                          row=9,
-                                          width=self.spinbox_width)
+        self.description_textbox = tki_cw.Textbox(
+            self.frame,
+            label='Description',
+            default_text='what are you doing?',
+            row=9,
+            width=self.spinbox_width)
 
     def init_run_aquisition_button(self):
         self.running_aquisition = tk.BooleanVar()
         run_aquisition_button = tk.Button(self.frame, text="Run aquisition",
-                                          command=self.run_acquisition,
+                                          command=self.init_acquisition,
                                           width=self.button_width,
                                           height=self.button_height)
         run_aquisition_button.bind('<Enter>', self.get_tkfocus)
         run_aquisition_button.grid(row=10, column=0, padx=10, pady=10)
 
-    def run_acquisition(self):
+    def init_acquisition(self):
+        print('\nAcquisition -> started')
         if self.live_mode_enabled.get(): self.live_mode_enabled.set(0)
         if self.scout_mode_enabled.get(): self.scout_mode_enabled.set(0)
+        self.cancel_aquisition.set(0)
         self.running_aquisition.set(1)
         self.apply_settings(_print=True)
-        folder_name = self.get_folder_name()
-        for i in range(self.acquisitions.spinbox_value):
-            if i == 0: # avoid first delay_s
-                self.scope.acquire(filename='%06i.tif'%i,
-                   folder_name=folder_name,
-                   description=self.description.text)
-            else:
-                self.scope.acquire(filename='%06i.tif'%i,
-                                   folder_name=folder_name,
-                                   description=self.description.text,
-                                   delay_s=self.delay_s.spinbox_value)
-        self.scope.finish_all_tasks()
-        self.running_aquisition.set(0)
+        self.folder_name = self.get_folder_name()
+        self.description = self.description_textbox.text
+        self.delay_s = self.delay_spinbox.spinbox_value
+        self.acquisitions = self.acquisitions_spinbox.spinbox_value
+        self.acquisition_count = 0
+        self.run_acquisition()
+
+    def run_acquisition(self):
+        delay_s = self.delay_s
+        if self.acquisition_count == 0: delay_s = 0 # avoid first delay_s
+        self.scope.acquire(filename='%06i.tif'%self.acquisition_count,
+                           folder_name=self.folder_name,
+                           description=self.description,
+                           delay_s=delay_s)
+        self.acquisition_count += 1
+        if (self.acquisition_count < self.acquisitions
+            and not self.cancel_aquisition.get()): # acquire again
+                wait_ms = int(round(
+                    0.99 * 1e3 * (self.scope.buffer_time_s + delay_s)))
+                self.frame.after(wait_ms, self.run_acquisition) 
+        else: # finish up
+            self.scope.finish_all_tasks()
+            self.running_aquisition.set(0)
+            print('Acquisition -> finished\n')
+
+    def init_cancel_aquisition_button(self):
+        self.cancel_aquisition = tk.BooleanVar()
+        cancel_aquisition_button = tk.Button(
+            self.frame, text="Cancel aquisition",
+            command=self.cancel_acquisition,
+            width=self.button_width,
+            height=self.button_height)
+        cancel_aquisition_button.bind('<Enter>', self.get_tkfocus)
+        cancel_aquisition_button.grid(row=11, column=0, padx=10, pady=10)
+
+    def cancel_acquisition(self):
+        self.cancel_aquisition.set(1)
+        print('\n ***Acquisition -> canceled*** \n')
 
     def get_folder_name(self):
         dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
         folder_index = 0
-        folder_name = dt + '%03i_'%folder_index + self.label.text
+        folder_name = dt + '%03i_'%folder_index + self.label_textbox.text
         while os.path.exists(folder_name): # check before overwriting
             folder_index +=1
-            folder_name = dt + '%03i_'%folder_index + self.label.text
+            folder_name = dt + '%03i_'%folder_index + self.label_textbox.text
         return folder_name
 
     def get_channel_settings(self):
@@ -583,7 +613,7 @@ class GuiAcquisition:
         width_px = gui_camera.width_px.spinbox_value
         voxel_aspect_ratio = gui_galvo.voxel_aspect_ratio.spinbox_value
         scan_range_um = gui_galvo.scan_range_um.spinbox_value
-        volumes_per_buffer=self.volumes.spinbox_value
+        volumes_per_buffer=self.volumes_spinbox.spinbox_value
         focus_piezo_z_um = gui_focus_piezo.position_um.spinbox_value
         if (power_per_channel != self.power_per_channel or
             channels_per_slice != self.channels_per_slice):
@@ -630,17 +660,19 @@ class GuiAcquisition:
         total_memory_gb = 1e-9 * self.scope.total_bytes
         max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
         memory_pct = 100 * total_memory_gb / max_memory_gb
-        print('\nTotal memory needed   (GB) = %0.6f (%0.2f%% of max)'%(
+        print('Total memory needed   (GB) = %0.6f (%0.2f%% of max)'%(
             total_memory_gb, memory_pct))
         # calculate storage:
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
         total_storage_gb = (
-            data_gb + preview_gb) * self.acquisitions.spinbox_value
+            data_gb + preview_gb) * self.acquisitions_spinbox.spinbox_value
         print('Total storaged needed (GB) = %0.6f'%total_storage_gb)
         # calculate time:
-        acquire_time_s = self.scope.buffer_time_s + self.delay_s.spinbox_value
-        total_time_s = acquire_time_s * self.acquisitions.spinbox_value
+        acquire_time_s = (
+            self.scope.buffer_time_s + self.delay_spinbox.spinbox_value)
+        total_time_s = (
+            acquire_time_s * self.acquisitions_spinbox.spinbox_value)
         print('Total acquisition time (s) = %0.6f (%0.2f min)'%(
             total_time_s, (total_time_s / 60)))
         print('Vps ~ %0.6f'%self.scope.volumes_per_s)
@@ -662,8 +694,9 @@ if __name__ == '__main__':
     gui_focus_piezo =       GuiFocusPiezo(root)
     gui_xy_stage =          GuiXYStage(root)
 
-    quit_ = tk.Button(root, text="QUIT", command=root.quit, height=5, width=30)
-    quit_.grid(row=3, column=4, padx=20, pady=20, sticky='n')
+    quit_ = tk.Button(
+        root, text="QUIT GUI", command=root.quit, height=5, width=30)
+    quit_.grid(row=3, column=2, padx=20, pady=20, sticky='n')
 
     root.mainloop()
     gui_acquisition.close()
