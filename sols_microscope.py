@@ -784,11 +784,14 @@ class DataPreview:
                 X_px_um = sample_px_um # width axis
                 Y_px_um = sample_px_um * np.cos(tilt) # prop. axis to scan axis
                 Z_px_um = sample_px_um * np.sin(tilt) # prop. axis to O1 axis
-                O1_img = zoom(O1_proj, (Y_px_um / X_px_um, 1))
-                scan_img = zoom(scan_proj, (Z_px_um / X_px_um, 1))
+                O1_img    = zoom(
+                    O1_proj, (Y_px_um / X_px_um, 1), mode='nearest')
+                scan_img  = zoom(
+                    scan_proj, (Z_px_um / X_px_um, 1), mode='nearest')
                 scan_scale = O1_img.shape[0] / width_proj.shape[0]
                 # = scan_step_size_um / X_px_um rounded to match O1_img.shape[0]
-                width_img = zoom(width_proj, (scan_scale, Z_px_um / X_px_um))
+                width_img = zoom(
+                    width_proj, (scan_scale, Z_px_um / X_px_um), mode='nearest')
                 # Make image with all projections and flip for traditional view:
                 y_px, x_px = O1_img.shape
                 line_min, line_max = O1_img.min(), O1_img.max()
