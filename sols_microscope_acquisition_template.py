@@ -23,7 +23,7 @@ if __name__ == '__main__': # required block for sols_microscope
         height_px=500,                          # 12 -> 500  (typical range)
         width_px=1020,                          # 60 -> 1020 (typical range)
         voxel_aspect_ratio=2,                   # 2  -> 10   (typical range)
-        scan_range_um=100,                      # 10-> 100  (typical range)
+        scan_range_um=100,                      # 10 -> 100  (typical range)
         volumes_per_buffer=1,                   # usually 1, can be more...
         focus_piezo_z_um=(0,'relative'),        # = don't move
         XY_stage_position_mm=(0,0,'relative'),  # = don't move
