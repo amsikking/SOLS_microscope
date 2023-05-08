@@ -9,11 +9,10 @@
 8) **XY stage** box (PI), main optical table next to PC, button on front
 9) **Focus piezo** box (PI), main optical table behind main microscope, little toggle button on front (next to power input)
 10) **Snoutfocus laser** (Thorlabs LDS5), main optical table in front off focus piezo, button on top of power supply
-11) **Snoutfocus shutter A** (Thorlabs KSC101), main optical table, next to snoutfocus laser, little red switch
-12) **Snoutfocus shutter B** pull wheel away from table once to set 'active'
-13) **Snoutfocus piezo** driver (Thorlabs MDT694B), lower shelf middle, button on front
-14) **Camera** (PCO edge4.2), main optical table back right, small black button on the back, **be gentle!**
-15) **'sols_microscope_gui.py'** -> open script and run!
+11) **Snoutfocus shutter** (Thorlabs KSC101), main optical table, next to snoutfocus laser, little red switch
+12) **Snoutfocus piezo** driver (Thorlabs MDT694B), lower shelf middle, button on front
+13) **Camera** (PCO edge4.2), main optical table back right, small black button on the back, **be gentle!**
+14) **'sols_microscope_gui.py'** -> open script and run!
 
 # Power OFF:
 Everything in any order!
