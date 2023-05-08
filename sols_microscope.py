@@ -18,6 +18,7 @@ try:
     import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
     import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
     import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
+    import thorlabs_KSC101      # github.com/amsikking/thorlabs_KSC101
     import shm_win_patch        # github.com/amsikking/shm_win_patch
     import concurrency_tools as ct              # github.com/AndrewGYork/tools
     from napari_in_subprocess import display    # github.com/AndrewGYork/tools
@@ -113,10 +114,15 @@ class Microscope:
 
     def _init_snoutfocus(self):
         if self.verbose: print("\n%s: opening snoutfocus piezo..."%self.name)
-        self.snoutfocus_controller = thorlabs_MDT694B.Controller(
+        self.snoutfocus_piezo = thorlabs_MDT694B.Controller(
             which_port='COM7', verbose=False)
-        if self.verbose: print("\n%s: -> snoutfocus piezo open."%self.name)        
-        atexit.register(self.snoutfocus_controller.close)
+        if self.verbose: print("\n%s: -> snoutfocus piezo open."%self.name)
+        self.snoutfocus_shutter = thorlabs_KSC101.Controller(
+            'COM14', mode='trigger', verbose=False)
+        self.snoutfocus_shutter.set_state('open', block=False)
+        if self.verbose: print("\n%s: -> snoutfocus shutter open."%self.name)
+        atexit.register(self.snoutfocus_piezo.close)
+        atexit.register(self.snoutfocus_shutter.close)
 
     def _init_focus_piezo(self):
         if self.verbose: print("\n%s: opening focus piezo..."%self.name)
@@ -466,7 +472,7 @@ class Microscope:
             old_voltages = self.voltages
             # Get microscope settings ready to take our measurement:
             self.filter_wheel.move(1, speed=6, block=False) # Empty slot
-            self.snoutfocus_controller.set_voltage(0, block=False) # fw slower
+            self.snoutfocus_piezo.set_voltage(0, block=False) # fw slower
             piezo_limit_v = 150 # 15 um for current piezo
             piezo_step_v = 2 # 200 nm steps
             piezo_voltages = np.arange(
@@ -501,7 +507,7 @@ class Microscope:
             # Allocate memory and finalize microscope settings:
             data_buffer = self._get_data_buffer(
                 (images, self.camera.height_px, self.camera.width_px), 'uint16')
-            self.snoutfocus_controller._finish_set_voltage(polling_wait_s=0)
+            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
             self.filter_wheel._finish_moving()
             # Take pictures while moving the snoutfocus piezo:
             camera_thread = ct.ResultThread(
@@ -518,12 +524,12 @@ class Microscope:
             # Inspect the images to find/set best snoutfocus piezo position:
             if np.max(data_buffer) < 5 * np.min(data_buffer):
                 print('\n%s: WARNING snoutfocus laser intensity low:'%self.name)
-                print('%s: -> is the laser/shutter powered up?'%self.name)
+                print('%s: -> is the laser powered up?'%self.name)
             v = piezo_step_v * np.unravel_index(
                 np.argmax(data_buffer), data_buffer.shape)[0]
             if (v == 0 or v == piezo_limit_v):
                 print('\n%s: WARNING snoutfocus piezo out of range!'%self.name)
-            self.snoutfocus_controller.set_voltage(v, block=False)
+            self.snoutfocus_piezo.set_voltage(v, block=False)
             if self.verbose:
                 print('\n%s: snoutfocus piezo voltage = %0.2f'%(self.name, v))
             # Finish cleaning up after ourselves:
@@ -533,7 +539,7 @@ class Microscope:
             self.camera._set_exposure_time_us(old_exp_us)
             self.camera._set_timestamp_mode(old_timestamp)
             self.camera._arm(self.camera._num_buffers)
-            self.snoutfocus_controller._finish_set_voltage(polling_wait_s=0)
+            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
             self.filter_wheel._finish_moving()
             write_voltages_thread.get_result()
             self._settings_applied = True
@@ -667,7 +673,8 @@ class Microscope:
         self.ao.close()
         self.filter_wheel.close()
         self.camera.close()
-        self.snoutfocus_controller.close()
+        self.snoutfocus_piezo.close()
+        self.snoutfocus_shutter.close()
         self.focus_piezo.close()
         self.XY_stage.close()
         self.display.close()
