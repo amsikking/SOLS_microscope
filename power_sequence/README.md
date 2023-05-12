@@ -14,5 +14,7 @@
 13) **Camera** (PCO edge4.2), main optical table back right, small black button on the back, **be gentle!**
 14) **'sols_microscope_gui.py'** -> open script and run!
 
+Note: The **Okolabs** objective heater can be funky. Check the temperature on the screen with the 'magnifying glass'. If the temperature is not changing to reach the set point then try going to settings -> temperature -> objective heater and then hitting disable -> re-enable -> factory settings.
+
 # Power OFF:
 Everything in any order!
