@@ -19,6 +19,8 @@ try:
     import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
     import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
     import thorlabs_KSC101      # github.com/amsikking/thorlabs_KSC101
+    # https://github.com/amsikking/coherent_OBIS_LSLX_laser_box
+    import coherent_OBIS_LSLX_laser_box
     import shm_win_patch        # github.com/amsikking/shm_win_patch
     import concurrency_tools as ct              # github.com/AndrewGYork/tools
     from napari_in_subprocess import display    # github.com/AndrewGYork/tools
@@ -46,6 +48,8 @@ class Microscope:
             target=self._init_filter_wheel).start() #~5.3s
         slow_camera_init = ct.ResultThread(
             target=self._init_camera).start()       #~3.6s
+        slow_lasers_init = ct.ResultThread(
+            target=self._init_lasers).start()       #~1.1s        
         slow_snoutfocus_init = ct.ResultThread(
             target=self._init_snoutfocus).start()   #1s
         slow_focus_init = ct.ResultThread(
@@ -58,6 +62,7 @@ class Microscope:
         slow_stage_init.get_result()
         slow_focus_init.get_result()
         slow_snoutfocus_init.get_result()
+        slow_lasers_init.get_result()
         slow_camera_init.get_result()
         slow_fw_init.get_result()
         self.max_allocated_bytes = max_allocated_bytes
@@ -111,6 +116,14 @@ class Microscope:
         self.camera = ct.ObjectInSubprocess(
             pco_edge42_cl.Camera, verbose=False, close_method_name='close')
         if self.verbose: print("\n%s: -> camera open."%self.name)
+
+    def _init_lasers(self):
+        if self.verbose: print("\n%s: opening lasers..."%self.name)
+        self.lasers = coherent_OBIS_LSLX_laser_box.Controller(
+            which_port='COM4', control_mode='analog', verbose=False)
+        for laser in self.lasers.lasers:
+            self.lasers.set_enable('ON', laser)
+        if self.verbose: print("\n%s: -> lasers open."%self.name)
 
     def _init_snoutfocus(self):
         if self.verbose: print("\n%s: opening snoutfocus piezo..."%self.name)
@@ -673,6 +686,7 @@ class Microscope:
         self.ao.close()
         self.filter_wheel.close()
         self.camera.close()
+        self.lasers.close()
         self.snoutfocus_piezo.close()
         self.snoutfocus_shutter.close()
         self.focus_piezo.close()
