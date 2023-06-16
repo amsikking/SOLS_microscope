@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import tkinter as tk
+from tkinter import font
 
 import sols_microscope as sols
 import tkinter_compound_widgets as tkcw
@@ -8,7 +9,7 @@ import tkinter_compound_widgets as tkcw
 class GuiTransmittedLight:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='TRANSMITTED LIGHT', bd=6)
-        frame.grid(row=0, column=0, padx=20, pady=20, sticky='n')
+        frame.grid(row=1, column=0, padx=10, pady=10, sticky='n')
         self.power = tkcw.CheckboxSliderSpinbox(
             frame,
             label='470-850nm (%)',
@@ -19,7 +20,7 @@ class GuiTransmittedLight:
 class GuiLaserBox:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='LASER BOX', bd=6)
-        frame.grid(row=1, column=0, padx=20, pady=20, sticky='n')
+        frame.grid(row=2, column=0, padx=10, pady=10, sticky='n')
         self.power405 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='405nm (%)',
@@ -51,143 +52,307 @@ class GuiLaserBox:
 class GuiFilterWheel:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='FILTER WHEEL', bd=6)
-        frame.grid(row=0, column=1, rowspan=2, padx=20, pady=20, sticky='n')
-        self.filter = tkcw.RadioButtons(
-            frame,
-            label='options',
-            buttons=('0: Shutter',
-                     '1: Open',
-                     '2: ET450/50M',
-                     '3: ET525/50M',
-                     '4: ET600/50M',
-                     '5: ET690/50M',
-                     '6: ZETquadM',
-                     '7: LP02-488RU',
-                     '8: LP02-561RU',
-                     '9: (available)'),
-            default_position=6)
+        frame.grid(row=3, column=0, padx=10, pady=10, sticky='n')
+        self.inner_frame = tk.LabelFrame(frame, text='choice')
+        self.inner_frame.grid(row=0, column=0, padx=10, pady=10)
+        self.options = {'Shutter'   :0,
+                        'Open'      :1,
+                        'ET450/50M' :2,
+                        'ET525/50M' :3,
+                        'ET600/50M' :4,
+                        'ET690/50M' :5,
+                        'ZETquadM'  :6,
+                        'LP02-488RU':7,
+                        'LP02-561RU':8,
+                        '(unused)'  :9}
+        self.default_choice = 'ZETquadM'
+        self.init_optionmenu()
+        self.update_position(self.default_choice)
 
-class GuiGalvo:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='GALVO', bd=6)
-        frame.grid(row=0, column=2, padx=20, pady=20, sticky='n')
-        self.scan_range_um = tkcw.CheckboxSliderSpinbox(
-            frame,
-            label='~scan range (um)',
-            checkbox_enabled=False,
-            slider_length=350,
-            tickinterval=10,
-            min_value=1,
-            max_value=100,
-            default_value=50)
-        self.voxel_aspect_ratio = tkcw.CheckboxSliderSpinbox(
-            frame,
-            label='~voxel aspect ratio',
-            checkbox_enabled=False,
-            slider_length=350,
-            tickinterval=10,
-            min_value=2,
-            max_value=80,         
-            default_value=25,
-            row=1)
+    def init_optionmenu(self):
+        self.current_choice = tk.StringVar()
+        self.current_choice.set(self.default_choice)
+        option_menu = tk.OptionMenu(
+            self.inner_frame,
+            self.current_choice,
+            *self.options.keys(),
+            command=self.update_position)
+        option_menu.config(width=50, height=2) # match to TL and lasers
+        option_menu.grid(row=0, column=0, padx=10, pady=10)
+
+    def update_position(self, current_choice):
+        self.position = self.options[current_choice]
 
 class GuiCamera:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='CAMERA', bd=6)
-        frame.grid(row=1, column=2, padx=20, pady=20, sticky='n')
+        frame.grid(row=1, column=1, rowspan=2, padx=10, pady=10, sticky='n')
+        self.illumination_time_us = tkcw.CheckboxSliderSpinbox(
+            frame,
+            label='illumination time (us)',
+            checkbox_enabled=False,
+            slider_length=350,
+            tickinterval=9,
+            min_value=100,
+            max_value=1000,
+            default_value=1000,
+            columnspan=2,
+            row=0)
         self.illumination_time_ms = tkcw.CheckboxSliderSpinbox(
             frame,
-            label='illumination time (ms)',
+            label='+ illumination time (ms)',
             checkbox_enabled=False,
             slider_length=350,
             tickinterval=10,
-            min_value=1,
-            max_value=250,
-            default_value=1,
-            columnspan=2)
+            min_value=0,
+            max_value=1000,
+            default_value=0,
+            columnspan=2,
+            row=1)
         self.height_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='height pixels',
             orient='vertical',
             checkbox_enabled=False,
-            slider_length=250,
+            slider_length=150,
+            tickinterval=3,
             slider_flipped=True,
             min_value=12,
             max_value=500,
             default_value=250,
-            row=1)
+            row=2)
         self.width_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='width pixels',
             checkbox_enabled=False,
             slider_length=250,
+            tickinterval=4,
             min_value=60,
             max_value=1000,
             default_value=1000,
-            row=2,
+            row=3,
             column=1,
             sticky='s')
         tkcw.CanvasRectangleSliderTrace2D(
-            frame, self.width_px, self.height_px, row=1, column=1)
+            frame,
+            self.width_px,
+            self.height_px,
+            row=2,
+            column=1,
+            fill='yellow')
+
+class GuiGalvo:
+    def __init__(self, master):
+        frame = tk.LabelFrame(master, text='GALVO', bd=6)
+        frame.grid(row=3, column=1, padx=10, pady=10, sticky='n')
+        slider_length = 380 # match to camera
+        button_width, button_height = 10, 2
+        # scan slider:
+        self.scan_range_um_min, self.scan_range_um_max = 1, 100
+        self.scan_range_um_center = int(round((
+        self.scan_range_um_max - self.scan_range_um_min) / 2))
+        self.scan_range_um = tkcw.CheckboxSliderSpinbox(
+            frame,
+            label='~scan range (um)',
+            checkbox_enabled=False,
+            slider_length=slider_length,
+            tickinterval=10,
+            min_value=self.scan_range_um_min,
+            max_value=self.scan_range_um_max,
+            default_value=self.scan_range_um_center,
+            row=0)
+        # scan min button:
+        button_scan_range_um_min = tk.Button(
+            frame,
+            text="min",
+            command=self.set_scan_range_um_min,
+            width=button_width,
+            height=button_height)
+        button_scan_range_um_min.grid(
+            row=1, column=0, padx=10, pady=10, sticky='w')
+        # scan center button:
+        button_scan_range_um_center = tk.Button(
+            frame,
+            text="center",
+            command=self.set_scan_range_um_center,
+            width=button_width,
+            height=button_height)
+        button_scan_range_um_center.grid(
+            row=1, column=0, padx=5, pady=5)
+        # scan max button:
+        button_scan_range_um_max = tk.Button(
+            frame,
+            text="max",
+            command=self.set_scan_range_um_max,
+            width=button_width,
+            height=button_height)
+        button_scan_range_um_max.grid(
+            row=1, column=0, padx=10, pady=10, sticky='e')
+        # voxel slider:
+        self.voxel_aspect_ratio_min, self.voxel_aspect_ratio_max = 2, 32
+        self.voxel_aspect_ratio_center = int(round((
+            self.voxel_aspect_ratio_max - self.voxel_aspect_ratio_min) / 2))
+        self.voxel_aspect_ratio = tkcw.CheckboxSliderSpinbox(
+            frame,
+            label='~voxel aspect ratio',
+            checkbox_enabled=False,
+            slider_length=slider_length,
+            tickinterval=10,
+            min_value=self.voxel_aspect_ratio_min,
+            max_value=self.voxel_aspect_ratio_max,
+            default_value=self.voxel_aspect_ratio_max,
+            row=2)
+        # voxel min button:
+        button_voxel_aspect_ratio_min = tk.Button(
+            frame,
+            text="min",
+            command=self.set_voxel_aspect_ratio_min,
+            width=button_width,
+            height=button_height)
+        button_voxel_aspect_ratio_min.grid(
+            row=3, column=0, padx=10, pady=10, sticky='w')
+        # voxel center button:
+        button_voxel_aspect_ratio_center = tk.Button(
+            frame,
+            text="center",
+            command=self.set_voxel_aspect_ratio_center,
+            width=button_width,
+            height=button_height)
+        button_voxel_aspect_ratio_center.grid(
+            row=3, column=0, padx=5, pady=5)
+        # voxel max button:
+        button_voxel_aspect_ratio_max = tk.Button(
+            frame,
+            text="max",
+            command=self.set_voxel_aspect_ratio_max,
+            width=button_width,
+            height=button_height)
+        button_voxel_aspect_ratio_max.grid(
+            row=3, column=0, padx=10, pady=10, sticky='e')
+
+    def set_scan_range_um_min(self):
+        self.update_scan_range_um(self.scan_range_um_min)
+        return None
+
+    def set_scan_range_um_center(self):
+        self.update_scan_range_um(self.scan_range_um_center)
+        return None
+
+    def set_scan_range_um_max(self):
+        self.update_scan_range_um(self.scan_range_um_max)
+        return None
+
+    def update_scan_range_um(self, scan_range_um):
+        self.scan_range_um.tk_spinbox_value.set(scan_range_um)
+        self.scan_range_um.tk_slider_value.set(scan_range_um)
+        self.scan_range_um.spinbox_value = scan_range_um
+        return None
+
+    def set_voxel_aspect_ratio_min(self):
+        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_min)
+        return None
+
+    def set_voxel_aspect_ratio_center(self):
+        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_center)
+        return None
+
+    def set_voxel_aspect_ratio_max(self):
+        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_max)
+        return None
+
+    def update_voxel_aspect_ratio(self, voxel_aspect_ratio):
+        self.voxel_aspect_ratio.tk_spinbox_value.set(voxel_aspect_ratio)
+        self.voxel_aspect_ratio.tk_slider_value.set(voxel_aspect_ratio)
+        self.voxel_aspect_ratio.spinbox_value = voxel_aspect_ratio
+        return None
 
 class GuiFocusPiezo:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='FOCUS PIEZO', bd=6)
-        frame.grid(row=0, column=3, rowspan=2, padx=20, pady=20, sticky='n')
-        self.min_value = 0
-        self.max_value = 100
-        self.center_value = int(round((self.max_value - self.min_value) / 2))
+        frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
+        self.min, self.max = 0, 100
+        self.center = int(round((self.max - self.min) / 2))
+        self.large_move, self.small_move = 5, 1
+        # slider:
         self.position_um = tkcw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
             orient='vertical',
             checkbox_enabled=False,
+            slider_length=460, # match to camera
             tickinterval=10,
-            min_value=self.min_value,
-            max_value=self.max_value)
+            min_value=self.min,
+            max_value=self.max,
+            rowspan=5)
         button_width, button_height = 10, 2
-        # up button:
-        self.button_up = tk.Button(
+        # up buttons:
+        button_large_move_up = tk.Button(
             frame,
-            text="up (5um)",
-            command=self.move_up,
+            text="up %ium"%self.large_move,
+            command=self.large_move_up,
             width=button_width,
             height=button_height)
-        self.button_up.grid(row=0, column=1, padx=10, pady=10, sticky='n')
+        button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
+        button_small_move_up = tk.Button(
+            frame,
+            text="up %ium"%self.small_move,
+            command=self.small_move_up,
+            width=button_width,
+            height=button_height)
+        button_small_move_up.grid(row=1, column=1, sticky='s')
         # center button:
-        self.button_center = tk.Button(
+        button_center_move = tk.Button(
             frame,
             text="center",
             command=self.move_center,
             width=button_width,
             height=button_height)
-        self.button_center.grid(row=0, column=1, padx=10, pady=10)
-        # down button:
-        self.button_down = tk.Button(
+        button_center_move.grid(row=2, column=1, padx=5, pady=5)
+        # down buttons:
+        button_small_move_down = tk.Button(
             frame,
-            text="down (5um)",
-            command=self.move_down,
+            text="down %ium"%self.small_move,
+            command=self.small_move_down,
             width=button_width,
             height=button_height)
-        self.button_down.grid(row=0, column=1, padx=10, pady=10, sticky='s')
+        button_small_move_down.grid(row=3, column=1, sticky='n')
+        button_large_move_down = tk.Button(
+            frame,
+            text="down %ium"%self.large_move,
+            command=self.large_move_down,
+            width=button_width,
+            height=button_height)
+        button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
 
-    def move_up(self):
-        up_value = self.position_um.spinbox_value - 5
-        if self.min_value <= up_value <= self.max_value:
-            self.update_position_value(up_value)
+    def large_move_up(self):
+        up_value = self.position_um.spinbox_value - self.large_move
+        if self.min <= up_value <= self.max:
+            self.update_position(up_value)
+        return None
+    
+    def small_move_up(self):
+        up_value = self.position_um.spinbox_value - self.small_move
+        if self.min <= up_value <= self.max:
+            self.update_position(up_value)
         return None
 
     def move_center(self):
-        self.update_position_value(self.center_value)
+        self.update_position(self.center)
         return None
 
-    def move_down(self):
-        down_value = self.position_um.spinbox_value + 5
-        if self.min_value <= down_value <= self.max_value:
-            self.update_position_value(down_value)
+    def small_move_down(self):
+        down_value = self.position_um.spinbox_value + self.small_move
+        if self.min <= down_value <= self.max:
+            self.update_position(down_value)
         return None
 
-    def update_position_value(self, position_um):
+    def large_move_down(self):
+        down_value = self.position_um.spinbox_value + self.large_move
+        if self.min <= down_value <= self.max:
+            self.update_position(down_value)
+        return None
+
+    def update_position(self, position_um):
         self.position_um.tk_spinbox_value.set(position_um)
         self.position_um.tk_slider_value.set(position_um)
         self.position_um.spinbox_value = position_um
@@ -196,33 +361,33 @@ class GuiFocusPiezo:
 class GuiXYStage:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='XY STAGE', bd=6)
-        frame.grid(row=1, column=3, padx=20, pady=20, sticky='s')
+        frame.grid(row=3, column=2, padx=10, pady=10, sticky='n')
         # last move textbox:
         self.last_move = tkcw.Textbox(
             frame,
             label='last move',
             default_text='None',
             height=1,
-            width=15)
-        self.last_move.grid(row=0, column=1, padx=10, pady=10)
+            width=10)
+        self.last_move.grid(row=0, column=0, padx=10, pady=10)
         # position textbox:
         self.position = tkcw.Textbox(
             frame,
             label='position (mm)',
             height=1,
             width=20)
-        self.position.grid(row=2, column=1, padx=10, pady=10)
+        self.position.grid(row=1, column=1, padx=10, pady=10)
         self.position_mm = None
-        
         button_width, button_height = 10, 2
         # up button:
+        padx, pady = 10, 10
         self.button_up = tk.Button(
             frame,
             text="up",
             command=self.move_up,
             width=button_width,
             height=button_height)
-        self.button_up.grid(row=1, column=1, padx=10, pady=10)
+        self.button_up.grid(row=0, column=1, padx=padx, pady=pady)
         self.move_up = False
         # down button:
         self.button_down = tk.Button(
@@ -231,7 +396,7 @@ class GuiXYStage:
             command=self.move_down,
             width=button_width,
             height=button_height)
-        self.button_down.grid(row=3, column=1, padx=10, pady=10)
+        self.button_down.grid(row=2, column=1, padx=padx, pady=pady)
         self.move_down = False
         # left button:
         self.button_left = tk.Button(
@@ -240,7 +405,7 @@ class GuiXYStage:
             command=self.move_left,
             width=button_width,
             height=button_height)
-        self.button_left.grid(row=2, column=0, padx=10, pady=10)
+        self.button_left.grid(row=1, column=0, padx=padx, pady=pady)
         self.move_left = False
         # right button:
         self.button_right = tk.Button(
@@ -249,21 +414,20 @@ class GuiXYStage:
             command=self.move_right,
             width=button_width,
             height=button_height)
-        self.button_right.grid(row=2, column=3, padx=10, pady=10)
+        self.button_right.grid(row=1, column=2, padx=padx, pady=pady)
         self.move_right = False
-        
         # move size:
         self.step_size_pct = tkcw.CheckboxSliderSpinbox(
             frame,
             label='step size (% of FOV)',
             checkbox_enabled=False,
             slider_length=250,
-            tickinterval=9,
+            tickinterval=6,
             min_value=5,
             max_value=95,
             default_value=95,
             row=4,
-            columnspan=4)
+            columnspan=3)
 
     def update_last_move(self, text):
         self.last_move.textbox.delete('1.0', '10.0')
@@ -294,9 +458,15 @@ class GuiXYStage:
         return None
 
 class GuiMicroscope:
-    def __init__(self):
+    def __init__(self, init_microscope=True): # set False for GUI design...
+        self.init_microscope = init_microscope 
         self.root = tk.Tk()
         self.root.title('SOLS Microscope GUI')
+        # adjust font size and delay:
+        size = 10 # default = 9
+        font.nametofont("TkDefaultFont").configure(size=size)
+        font.nametofont("TkFixedFont").configure(size=size)
+        font.nametofont("TkTextFont").configure(size=size)
         self.gui_delay_ms = int(1e3 * 1 / 30) # 30fps/video rate target
         # load nested GUI's for each element:
         self.gui_transmitted_light  = GuiTransmittedLight(self.root)
@@ -306,62 +476,139 @@ class GuiMicroscope:
         self.gui_camera             = GuiCamera(self.root)
         self.gui_focus_piezo        = GuiFocusPiezo(self.root)
         self.gui_xy_stage           = GuiXYStage(self.root)
-        # load acquisition GUI with microscope methods:
-        self.init_gui_acquisition()
-        # add the quit button:
-        quit_gui_button = tk.Button(
-            self.root, text="QUIT GUI", command=self.close, height=5, width=30)
-        quit_gui_button.grid(row=3, column=2, padx=20, pady=20, sticky='n')
+        # load settings, acquisition and quit:
+        self.init_gui_settings()    # collects settings from GUI
+        self.init_gui_acquisition() # microscope methods
+        self.init_quit_button()
         # get settings from gui:
         gui_settings = self.get_gui_settings()
-        # init the microscope:
-        self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
-        # configure any hardware preferences:
-        self.scope.XY_stage.set_velocity(5, 5)
-        # apply settings to microscope (avoiding motion):
-        self.scope.apply_settings( # mandatory call
-            channels_per_slice      = gui_settings['channels_per_slice'],
-            power_per_channel       = gui_settings['power_per_channel'],
-            filter_wheel_position   = gui_settings['filter_wheel_position'],
-            illumination_time_us    = gui_settings['illumination_time_us'],
-            height_px               = gui_settings['height_px'],
-            width_px                = gui_settings['width_px'],
-            voxel_aspect_ratio      = gui_settings['voxel_aspect_ratio'],
-            scan_range_um           = gui_settings['scan_range_um'],
-            volumes_per_buffer      = gui_settings['volumes_per_buffer'],
-            focus_piezo_z_um        = (0, 'relative'),      # = don't move
-            XY_stage_position_mm    = (0, 0, 'relative')    # = don't move
-            ).join() # finish before accessing .scope attributes
-        # init settings attributes and match XYZ to hardware:
-        self.settings = {}
-        for k,v in list(gui_settings.items())[:-2]: # avoid XYZ
-            self.settings[k] = v # a lot like self.x = x
-        self.settings['focus_piezo_z_um'] = int(round(
-            self.scope.focus_piezo_z_um))
-        self.settings['XY_stage_position_mm'] = (
-            self.scope.XY_stage_position_mm)
-        # match GUI to XYZ:
-        self.gui_focus_piezo.update_position_value(
-            self.settings['focus_piezo_z_um'])
-        self.gui_xy_stage.update_position(
-            self.settings['XY_stage_position_mm'])
-        # get XY stage limits for feedback in scout mode:
-        self.XY_stage_x_min = self.scope.XY_stage.x_min
-        self.XY_stage_y_min = self.scope.XY_stage.y_min
-        self.XY_stage_x_max = self.scope.XY_stage.x_max
-        self.XY_stage_y_max = self.scope.XY_stage.y_max
-        # get scope ready:
-        self.loop_snoutfocus()
-        self.scope.acquire() # snap a volume
+        if init_microscope:
+            self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
+            # configure any hardware preferences:
+            self.scope.XY_stage.set_velocity(5, 5)
+            # apply settings to microscope (avoiding motion):
+            self.scope.apply_settings( # mandatory call
+                channels_per_slice      = gui_settings['channels_per_slice'],
+                power_per_channel       = gui_settings['power_per_channel'],
+                filter_wheel_position   = gui_settings['filter_wheel_position'],
+                illumination_time_us    = gui_settings['illumination_time_us'],
+                height_px               = gui_settings['height_px'],
+                width_px                = gui_settings['width_px'],
+                voxel_aspect_ratio      = gui_settings['voxel_aspect_ratio'],
+                scan_range_um           = gui_settings['scan_range_um'],
+                volumes_per_buffer      = gui_settings['volumes_per_buffer'],
+                focus_piezo_z_um        = (0, 'relative'),      # = don't move
+                XY_stage_position_mm    = (0, 0, 'relative')    # = don't move
+                ).join() # finish before accessing .scope attributes
+            # init settings attributes and match XYZ to hardware:
+            self.settings = {}
+            for k,v in list(gui_settings.items())[:-2]: # avoid XYZ
+                self.settings[k] = v # a lot like self.x = x
+            self.settings['focus_piezo_z_um'] = int(round(
+                self.scope.focus_piezo_z_um))
+            self.settings['XY_stage_position_mm'] = (
+                self.scope.XY_stage_position_mm)
+            # match GUI to XYZ:
+            self.gui_focus_piezo.update_position(
+                self.settings['focus_piezo_z_um'])
+            self.gui_xy_stage.update_position(
+                self.settings['XY_stage_position_mm'])
+            # get XY stage limits for feedback in scout mode:
+            self.XY_stage_x_min = self.scope.XY_stage.x_min
+            self.XY_stage_y_min = self.scope.XY_stage.y_min
+            self.XY_stage_x_max = self.scope.XY_stage.x_max
+            self.XY_stage_y_max = self.scope.XY_stage.y_max
+            # get scope ready:
+            self.loop_snoutfocus()
+            self.scope.acquire() # snap a volume
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
+
+    def init_quit_button(self):
+        quit_frame = tk.LabelFrame(self.root, text='QUIT', bd=6)
+        quit_frame.grid(row=3, column=5, padx=10, pady=10, sticky='s')
+        quit_gui_button = tk.Button(
+            quit_frame,
+            text="QUIT GUI",
+            command=self.close,
+            height=2,
+            width=25)
+        quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
+
+    def init_gui_settings(self):
+        self.aquisition_frame = tk.LabelFrame(
+            self.root, text='SETTINGS', bd=6)
+        self.aquisition_frame.grid(
+            row=1, column=4, rowspan=3, padx=10, pady=10, sticky='n')
+        self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
+        button_width, button_height = 25, 2
+        spinbox_width = 20
+        # label textbox:
+        self.label_textbox = tkcw.Textbox(
+            self.aquisition_frame,
+            label='Folder label',
+            default_text='sols_gui',
+            row=0,
+            width=spinbox_width,
+            height=1)
+        # description textbox:
+        self.description_textbox = tkcw.Textbox(
+            self.aquisition_frame,
+            label='Description',
+            default_text='what are you doing?',
+            row=1,
+            width=spinbox_width,
+            height=3)
+        # volumes spinbox:
+        self.volumes_spinbox = tkcw.CheckboxSliderSpinbox(
+            self.aquisition_frame,
+            label='Volumes per acquisition',
+            checkbox_enabled=False,
+            slider_enabled=False,
+            min_value=1,
+            max_value=1e3,
+            default_value=1,
+            row=2,
+            width=spinbox_width)
+        # acquisitions spinbox:
+        self.acquisitions_spinbox = tkcw.CheckboxSliderSpinbox(
+            self.aquisition_frame,
+            label='Acquisition number',
+            checkbox_enabled=False,
+            slider_enabled=False,
+            min_value=1,
+            max_value=1e6,
+            default_value=1,
+            row=3,
+            width=spinbox_width)
+        # delay spinbox:
+        self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
+            self.aquisition_frame,
+            label='Inter-acquisition delay (s)',
+            checkbox_enabled=False,
+            slider_enabled=False,
+            min_value=0,
+            max_value=3600,
+            default_value=0,
+            row=4,
+            width=spinbox_width)
+        # print memory and time button:
+        print_memory_and_time_button = tk.Button(
+            self.aquisition_frame,
+            text="Print memory and time",
+            command=self.apply_settings,
+            width=button_width,
+            height=button_height)
+        print_memory_and_time_button.grid(row=5, column=0, padx=10, pady=10)
+        print_memory_and_time_button.bind('<Enter>', self.get_tkfocus)
+        return None
 
     def init_gui_acquisition(self):
         self.aquisition_frame = tk.LabelFrame(
             self.root, text='ACQUISITION', bd=6)
         self.aquisition_frame.grid(
-            row=0, column=4, rowspan=2, padx=20, pady=20, sticky='n')
+            row=1, column=5, rowspan=3, padx=10, pady=10, sticky='n')
         self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
@@ -403,62 +650,6 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         snap_volume_and_save_button.grid(row=3, column=0, padx=10, pady=10)
-        # volumes spinbox:
-        self.volumes_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
-            label='Volumes per acquisition',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=1,
-            max_value=1e3,
-            default_value=1,
-            row=4,
-            width=spinbox_width)
-        # acquisitions spinbox:
-        self.acquisitions_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
-            label='Acquisition number',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=1,
-            max_value=1e6,
-            default_value=1,
-            row=5,
-            width=spinbox_width)
-        # delay spinbox:
-        self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
-            label='Inter-acquisition delay (s)',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=0,
-            max_value=3600,
-            default_value=0,
-            row=6,
-            width=spinbox_width)
-        # print memory and time button:
-        print_memory_and_time_button = tk.Button(
-            self.aquisition_frame,
-            text="Print memory and time",
-            command=self.apply_settings,
-            width=button_width,
-            height=button_height)
-        print_memory_and_time_button.grid(row=7, column=0, padx=10, pady=10)
-        print_memory_and_time_button.bind('<Enter>', self.get_tkfocus)
-        # label textbox:
-        self.label_textbox = tkcw.Textbox(
-            self.aquisition_frame,
-            label='Folder label',
-            default_text='sols_gui',
-            row=8,
-            width=spinbox_width)
-        # description textbox:
-        self.description_textbox = tkcw.Textbox(
-            self.aquisition_frame,
-            label='Description',
-            default_text='what are you doing?',
-            row=9,
-            width=spinbox_width)
         # run aquisition button:
         self.running_aquisition = tk.BooleanVar()
         run_aquisition_button = tk.Button(
@@ -467,7 +658,7 @@ class GuiMicroscope:
             command=self.init_acquisition,
             width=button_width,
             height=button_height)
-        run_aquisition_button.grid(row=10, column=0, padx=10, pady=10)
+        run_aquisition_button.grid(row=4, column=0, padx=10, pady=10)
         run_aquisition_button.bind('<Enter>', self.get_tkfocus)
         # cancel aquisition button:
         self.cancel_aquisition = tk.BooleanVar()
@@ -477,7 +668,7 @@ class GuiMicroscope:
             command=self.cancel_acquisition,
             width=button_width,
             height=button_height)
-        cancel_aquisition_button.grid(row=11, column=0, padx=10, pady=10)
+        cancel_aquisition_button.grid(row=5, column=0, padx=10, pady=10)
         return None
 
     def get_tkfocus(self, event):   # event is not used here (.bind)
@@ -512,9 +703,10 @@ class GuiMicroscope:
             channels_per_slice = ('LED',)
             power_per_channel = (
                 self.gui_transmitted_light.power.spinbox_value,)
-        filter_wheel_position = self.gui_filter_wheel.filter.position
+        filter_wheel_position = self.gui_filter_wheel.position
         illumination_time_us = (
-            1000 * self.gui_camera.illumination_time_ms.spinbox_value)
+            1000 * self.gui_camera.illumination_time_ms.spinbox_value
+            + self.gui_camera.illumination_time_us.spinbox_value)
         height_px = self.gui_camera.height_px.spinbox_value
         width_px  = self.gui_camera.width_px.spinbox_value
         voxel_aspect_ratio = self.gui_galvo.voxel_aspect_ratio.spinbox_value
@@ -735,9 +927,9 @@ class GuiMicroscope:
         return None
 
     def close(self):
-        self.scope.close()
+        if self.init_microscope: self.scope.close()
         self.root.quit()
         return None
 
 if __name__ == '__main__':
-    gui_microscope = GuiMicroscope()
+    gui_microscope = GuiMicroscope(init_microscope=True)
