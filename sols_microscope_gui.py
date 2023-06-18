@@ -485,39 +485,23 @@ class GuiMicroscope:
         if init_microscope:
             self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
             # configure any hardware preferences:
-            self.scope.XY_stage.set_velocity(5, 5)
-            # apply settings to microscope (avoiding motion):
-            self.scope.apply_settings( # mandatory call
-                channels_per_slice      = gui_settings['channels_per_slice'],
-                power_per_channel       = gui_settings['power_per_channel'],
-                filter_wheel_position   = gui_settings['filter_wheel_position'],
-                illumination_time_us    = gui_settings['illumination_time_us'],
-                height_px               = gui_settings['height_px'],
-                width_px                = gui_settings['width_px'],
-                voxel_aspect_ratio      = gui_settings['voxel_aspect_ratio'],
-                scan_range_um           = gui_settings['scan_range_um'],
-                volumes_per_buffer      = gui_settings['volumes_per_buffer'],
-                focus_piezo_z_um        = (0, 'relative'),      # = don't move
-                XY_stage_position_mm    = (0, 0, 'relative')    # = don't move
-                ).join() # finish before accessing .scope attributes
-            # init settings attributes and match XYZ to hardware:
-            self.settings = {}
-            for k,v in list(gui_settings.items())[:-2]: # avoid XYZ
-                self.settings[k] = v # a lot like self.x = x
-            self.settings['focus_piezo_z_um'] = int(round(
-                self.scope.focus_piezo_z_um))
-            self.settings['XY_stage_position_mm'] = (
-                self.scope.XY_stage_position_mm)
-            # match GUI to XYZ:
-            self.gui_focus_piezo.update_position(
-                self.settings['focus_piezo_z_um'])
-            self.gui_xy_stage.update_position(
-                self.settings['XY_stage_position_mm'])
+            self.scope.XY_stage.set_velocity(5, 5)            
+            # get XYZ direct from hardware and match to gui to aviod motion:
+            focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
+            XY_stage_position_mm = (self.scope.XY_stage.x,
+                                    self.scope.XY_stage.y)
+            self.gui_focus_piezo.update_position(focus_piezo_z_um)
+            self.gui_xy_stage.update_position(XY_stage_position_mm)
             # get XY stage limits for feedback in scout mode:
             self.XY_stage_x_min = self.scope.XY_stage.x_min
             self.XY_stage_y_min = self.scope.XY_stage.y_min
             self.XY_stage_x_max = self.scope.XY_stage.x_max
             self.XY_stage_y_max = self.scope.XY_stage.y_max
+            # init settings attributes:
+            self.settings = {}
+            for k in gui_settings.keys():
+                self.settings[k] = None
+            self.apply_settings(XY_stage=True, verbose=False) # mandatory call
             # get scope ready:
             self.loop_snoutfocus()
             self.scope.acquire() # snap a volume
@@ -727,7 +711,7 @@ class GuiMicroscope:
                         'XY_stage_position_mm'  :XY_stage_position_mm}
         return gui_settings
 
-    def apply_settings(self, single_volume=False, verbose=True):
+    def apply_settings(self, single_volume=False, XY_stage=False, verbose=True):
         gui = self.get_gui_settings() # short for 'gui_settings'
         new_settings = len(gui)*[None] # pass 'None' if no change
         # check gui settings against applied settings:
@@ -740,7 +724,12 @@ class GuiMicroscope:
                 new_settings[i + 2] = gui[k] # + 2 since we start at setting 2
         if self.settings['focus_piezo_z_um'] != gui['focus_piezo_z_um']:
             new_settings[9] = (gui['focus_piezo_z_um'], 'absolute')
-        # no update to XY here (new_settings[10] = None)
+        if XY_stage: # default False for joystick
+            if self.settings['XY_stage_position_mm'] != gui[
+                'XY_stage_position_mm']:
+                new_settings[10] = (gui['XY_stage_position_mm'][0],
+                                    gui['XY_stage_position_mm'][1],
+                                    'absolute')
         # apply settings:
         if single_volume: new_settings[8] = 1
         self.scope.apply_settings(
