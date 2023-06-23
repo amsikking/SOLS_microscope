@@ -479,8 +479,9 @@ class GuiMicroscope:
         self.gui_focus_piezo        = GuiFocusPiezo(self.root)
         self.gui_xy_stage           = GuiXYStage(self.root)
         # load settings, acquisition and quit:
-        self.init_gui_settings()    # collects settings from GUI
-        self.init_gui_acquisition() # microscope methods
+        self.init_gui_settings()        # collects settings from GUI
+        self.init_gui_settings_output() # shows output from settings
+        self.init_gui_acquisition()     # microscope methods
         self.init_quit_button()
         # get settings from gui:
         gui_settings = self.get_gui_settings()
@@ -525,16 +526,16 @@ class GuiMicroscope:
         quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
 
     def init_gui_settings(self):
-        self.aquisition_frame = tk.LabelFrame(
+        self.settings_frame = tk.LabelFrame(
             self.root, text='SETTINGS', bd=6)
-        self.aquisition_frame.grid(
+        self.settings_frame.grid(
             row=1, column=4, rowspan=3, padx=10, pady=10, sticky='n')
-        self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.settings_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
         # label textbox:
         self.label_textbox = tkcw.Textbox(
-            self.aquisition_frame,
+            self.settings_frame,
             label='Folder label',
             default_text='sols_gui',
             row=0,
@@ -542,7 +543,7 @@ class GuiMicroscope:
             height=1)
         # description textbox:
         self.description_textbox = tkcw.Textbox(
-            self.aquisition_frame,
+            self.settings_frame,
             label='Description',
             default_text='what are you doing?',
             row=1,
@@ -550,7 +551,7 @@ class GuiMicroscope:
             height=3)
         # volumes spinbox:
         self.volumes_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
+            self.settings_frame,
             label='Volumes per acquisition',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -561,7 +562,7 @@ class GuiMicroscope:
             width=spinbox_width)
         # acquisitions spinbox:
         self.acquisitions_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
+            self.settings_frame,
             label='Acquisition number',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -572,7 +573,7 @@ class GuiMicroscope:
             width=spinbox_width)
         # delay spinbox:
         self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.aquisition_frame,
+            self.settings_frame,
             label='Inter-acquisition delay (s)',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -581,15 +582,59 @@ class GuiMicroscope:
             default_value=0,
             row=4,
             width=spinbox_width)
-        # print memory and time button:
-        print_memory_and_time_button = tk.Button(
-            self.aquisition_frame,
-            text="Print memory and time",
-            command=self.print_memory_and_time,
+        return None
+
+    def init_gui_settings_output(self):
+        self.output_frame = tk.LabelFrame(
+            self.root, text='SETTINGS OUTPUT', bd=6)
+        self.output_frame.grid(
+            row=3, column=4, rowspan=3, padx=10, pady=10, sticky='n')
+        self.output_frame.bind('<Enter>', self.get_tkfocus) # force update
+        button_width, button_height = 25, 2
+        spinbox_width = 20
+        # auto update settings button:
+        self.auto_update_settings_enabled = tk.BooleanVar()
+        auto_update_settings_button = tk.Checkbutton(
+            self.output_frame,
+            text='Auto update (On/Off)',
+            variable=self.auto_update_settings_enabled,
+            command=self.init_auto_update_settings,
+            indicatoron=0,
             width=button_width,
             height=button_height)
-        print_memory_and_time_button.grid(row=5, column=0, padx=10, pady=10)
-        print_memory_and_time_button.bind('<Enter>', self.get_tkfocus)
+        auto_update_settings_button.grid(row=0, column=0, padx=10, pady=10)
+        # volumes per second textbox:
+        self.volumes_per_s_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Volumes per second',
+            default_text='None',
+            row=1,
+            width=spinbox_width,
+            height=1)
+        # total memory textbox:
+        self.total_memory_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Total memory (GB)',
+            default_text='None',
+            row=2,
+            width=spinbox_width,
+            height=1)
+        # total storage textbox:
+        self.total_storage_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Total storage (GB)',
+            default_text='None',
+            row=3,
+            width=spinbox_width,
+            height=1)
+        # total time textbox:
+        self.total_time_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Total acquisition time (s)',
+            default_text='None',
+            row=4,
+            width=spinbox_width,
+            height=1)
         return None
 
     def init_gui_acquisition(self):
@@ -780,28 +825,47 @@ class GuiMicroscope:
             self.applied_settings[k] = copy.deepcopy(gui_settings[k])
         return None
 
-    def print_memory_and_time(self):
+    def update_gui_settings_output(self):
         self.scope.apply_settings().join() # update attributes
+        # volumes per second:
+        text = '%0.3f'%self.scope.volumes_per_s
+        self.volumes_per_s_textbox.textbox.delete('1.0', '10.0')
+        self.volumes_per_s_textbox.textbox.insert('1.0', text)
         # calculate memory:
         total_memory_gb = 1e-9 * self.scope.total_bytes
         max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
         memory_pct = 100 * total_memory_gb / max_memory_gb
+        text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
+        self.total_memory_textbox.textbox.delete('1.0', '10.0')
+        self.total_memory_textbox.textbox.insert('1.0', text)        
         # calculate storage:
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
         total_storage_gb = (
             data_gb + preview_gb) * self.acquisitions_spinbox.spinbox_value
+        text = '%0.3f'%total_storage_gb
+        self.total_storage_textbox.textbox.delete('1.0', '10.0')
+        self.total_storage_textbox.textbox.insert('1.0', text)        
         # calculate time:
         acquire_time_s = (
             self.scope.buffer_time_s + self.delay_spinbox.spinbox_value)
         total_time_s = (
-            acquire_time_s * self.acquisitions_spinbox.spinbox_value)        
-        print('Total memory needed   (GB) = %0.6f (%0.2f%% of max)'%(
-            total_memory_gb, memory_pct))
-        print('Total storaged needed (GB) = %0.6f'%total_storage_gb)
-        print('Total acquisition time (s) = %0.6f (%0.2f min)'%(
-            total_time_s, (total_time_s / 60)))            
-        print('Vps ~ %0.6f'%self.scope.volumes_per_s)
+            acquire_time_s * self.acquisitions_spinbox.spinbox_value)
+        text = '%0.6f (%0.0f min)'%(total_time_s, (total_time_s / 60))
+        self.total_time_textbox.textbox.delete('1.0', '10.0')
+        self.total_time_textbox.textbox.insert('1.0', text)
+        return None
+
+    def init_auto_update_settings(self):
+        self.live_mode_enabled.set(0)
+        self.scout_mode_enabled.set(0)
+        self.auto_update_settings()
+
+    def auto_update_settings(self):
+        if self.auto_update_settings_enabled.get():
+            self.apply_settings(check_XY_stage=False)
+            self.update_gui_settings_output()
+            self.root.after(self.gui_delay_ms, self.auto_update_settings)
         return None
 
     def loop_snoutfocus(self):
@@ -812,7 +876,7 @@ class GuiMicroscope:
 
     def snap_volume(self):
         self.apply_settings(single_volume=True)
-        self.print_memory_and_time()
+        self.update_gui_settings_output()
         self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire()
         return None
@@ -828,7 +892,7 @@ class GuiMicroscope:
 
     def snap_volume_and_save(self):
         self.apply_settings(single_volume=True)
-        self.print_memory_and_time()
+        self.update_gui_settings_output()
         folder_name = self.get_folder_name() + '_snap'
         self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire(filename='snap.tif',
@@ -837,7 +901,10 @@ class GuiMicroscope:
         return None
 
     def init_live_mode(self):
+        self.auto_update_settings_enabled.set(0)
         self.scout_mode_enabled.set(0)
+        self.apply_settings(single_volume=True)
+        self.update_gui_settings_output()
         self.run_live_mode()
         return None
 
@@ -857,10 +924,12 @@ class GuiMicroscope:
         return None
 
     def init_scout_mode(self):
+        self.auto_update_settings_enabled.set(0)
         self.live_mode_enabled.set(0)
+        self.reset_XY_buttons() # ignore any previous button presses
+        self.apply_settings(single_volume=True)
+        self.update_gui_settings_output()        
         if self.scout_mode_enabled.get():
-            self.reset_XY_buttons() # ignore any previous button presses
-            self.apply_settings(single_volume=True)
             self.last_acquire_task.join() # don't accumulate acquires
             self.last_acquire_task = self.scope.acquire()
         self.run_scout_mode()
@@ -935,12 +1004,13 @@ class GuiMicroscope:
 
     def init_acquisition(self):
         print('\nAcquisition -> started')
-        if self.live_mode_enabled.get(): self.live_mode_enabled.set(0)
-        if self.scout_mode_enabled.get(): self.scout_mode_enabled.set(0)
+        self.auto_update_settings_enabled.set(0)
+        self.live_mode_enabled.set(0)
+        self.scout_mode_enabled.set(0)
         self.cancel_aquisition.set(0)
         self.running_aquisition.set(1)
         self.apply_settings()
-        self.print_memory_and_time()
+        self.update_gui_settings_output()
         self.folder_name = self.get_folder_name()
         self.description = self.description_textbox.text
         self.delay_s = self.delay_spinbox.spinbox_value
