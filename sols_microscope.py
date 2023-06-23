@@ -424,6 +424,7 @@ class Microscope:
             check_write_voltages_thread = False
             if (channels_per_slice is not None or
                 power_per_channel is not None or
+                height_px is not None or
                 illumination_time_us is not None or
                 voxel_aspect_ratio is not None or
                 scan_range_um is not None or
