@@ -1,4 +1,5 @@
 import os
+import copy
 from datetime import datetime
 import tkinter as tk
 from tkinter import font
@@ -378,6 +379,7 @@ class GuiXYStage:
             width=20)
         self.position.grid(row=1, column=1, padx=10, pady=10)
         self.position_mm = None
+        # buttons
         button_width, button_height = 10, 2
         # up button:
         padx, pady = 10, 10
@@ -417,15 +419,15 @@ class GuiXYStage:
         self.button_right.grid(row=1, column=2, padx=padx, pady=pady)
         self.move_right = False
         # move size:
-        self.step_size_pct = tkcw.CheckboxSliderSpinbox(
+        self.move_pct = tkcw.CheckboxSliderSpinbox(
             frame,
             label='step size (% of FOV)',
             checkbox_enabled=False,
             slider_length=250,
             tickinterval=6,
-            min_value=5,
-            max_value=95,
-            default_value=95,
+            min_value=1,
+            max_value=100,
+            default_value=100,
             row=4,
             columnspan=3)
 
@@ -486,25 +488,27 @@ class GuiMicroscope:
             self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
             # configure any hardware preferences:
             self.scope.XY_stage.set_velocity(5, 5)            
-            # get XYZ direct from hardware and match to gui to aviod motion:
+            # get XYZ direct from hardware and update gui to aviod motion:
             focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
-            XY_stage_position_mm = (self.scope.XY_stage.x,
-                                    self.scope.XY_stage.y)
+            XY_stage_position_mm = [self.scope.XY_stage.x,
+                                    self.scope.XY_stage.y]
             self.gui_focus_piezo.update_position(focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
+            self.XY_joystick_active = False
+            self.XY_stage_last_move = 'None'
             # get XY stage limits for feedback in scout mode:
             self.XY_stage_x_min = self.scope.XY_stage.x_min
             self.XY_stage_y_min = self.scope.XY_stage.y_min
             self.XY_stage_x_max = self.scope.XY_stage.x_max
             self.XY_stage_y_max = self.scope.XY_stage.y_max
             # init settings attributes:
-            self.settings = {}
+            self.applied_settings = {}
             for k in gui_settings.keys():
-                self.settings[k] = None
-            self.apply_settings(XY_stage=True, verbose=False) # mandatory call
+                self.applied_settings[k] = None
+            self.apply_settings(check_XY_stage=False) # mandatory call
             # get scope ready:
             self.loop_snoutfocus()
-            self.scope.acquire() # snap a volume
+            self.last_acquire_task = self.scope.acquire() # snap a volume
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
@@ -581,7 +585,7 @@ class GuiMicroscope:
         print_memory_and_time_button = tk.Button(
             self.aquisition_frame,
             text="Print memory and time",
-            command=self.apply_settings,
+            command=self.print_memory_and_time,
             width=button_width,
             height=button_height)
         print_memory_and_time_button.grid(row=5, column=0, padx=10, pady=10)
@@ -698,6 +702,7 @@ class GuiMicroscope:
         volumes_per_buffer = self.volumes_spinbox.spinbox_value
         focus_piezo_z_um = self.gui_focus_piezo.position_um.spinbox_value
         XY_stage_position_mm = self.gui_xy_stage.position_mm
+        # settings:
         gui_settings = {'channels_per_slice'    :channels_per_slice,
                         'power_per_channel'     :power_per_channel,
                         'filter_wheel_position' :filter_wheel_position,
@@ -711,24 +716,50 @@ class GuiMicroscope:
                         'XY_stage_position_mm'  :XY_stage_position_mm}
         return gui_settings
 
-    def apply_settings(self, single_volume=False, XY_stage=False, verbose=True):
-        gui = self.get_gui_settings() # short for 'gui_settings'
-        new_settings = len(gui)*[None] # pass 'None' if no change
+    def check_XY_stage(self):
+        # has the position changed? is the joystick being used? 
+        self.scope.apply_settings().join() # update attributes
+        XY_stage_position_mm = list(self.scope.XY_stage_position_mm)
+        self.XY_joystick_active = False
+        if   XY_stage_position_mm[0] == self.XY_stage_x_min: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'left (-X)'
+        elif XY_stage_position_mm[0] == self.XY_stage_x_max: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'right (+X)'
+        elif XY_stage_position_mm[1] == self.XY_stage_y_min: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'down (-Y)'
+        elif XY_stage_position_mm[1] == self.XY_stage_y_max: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'up (+Y)'
+        return XY_stage_position_mm
+
+    def apply_settings(self, single_volume=False, check_XY_stage=True):
+        if check_XY_stage: # joystick used? If so update the gui:
+            XY_stage_position_mm = self.check_XY_stage()
+            if XY_stage_position_mm != self.gui_xy_stage.position_mm:
+                self.gui_xy_stage.update_position(XY_stage_position_mm)
+        gui_settings = self.get_gui_settings()
+        new_settings = len(gui_settings)*[None] # pass 'None' if no change
         # check gui settings against applied settings:
-        if (self.settings['channels_per_slice'] != gui['channels_per_slice'] or
-            self.settings['power_per_channel']  != gui['power_per_channel']):
-            new_settings[0] = gui['channels_per_slice']
-            new_settings[1] = gui['power_per_channel']
-        for i, k in enumerate(list(self.settings.keys())[2:-2]): # -2 avoid XYZ
-            if self.settings[k] != gui[k]:
-                new_settings[i + 2] = gui[k] # + 2 since we start at setting 2
-        if self.settings['focus_piezo_z_um'] != gui['focus_piezo_z_um']:
-            new_settings[9] = (gui['focus_piezo_z_um'], 'absolute')
-        if XY_stage: # default False for joystick
-            if self.settings['XY_stage_position_mm'] != gui[
-                'XY_stage_position_mm']:
-                new_settings[10] = (gui['XY_stage_position_mm'][0],
-                                    gui['XY_stage_position_mm'][1],
+        if (self.applied_settings[
+            'channels_per_slice'] != gui_settings['channels_per_slice'] or
+            self.applied_settings[
+                'power_per_channel']  != gui_settings['power_per_channel']):
+            new_settings[0] = gui_settings['channels_per_slice']
+            new_settings[1] = gui_settings['power_per_channel']
+        for i, k in enumerate(list(self.applied_settings.keys())[2:-2]): #-2 XYZ
+            if self.applied_settings[k] != gui_settings[k]:
+                new_settings[i + 2] = gui_settings[k] # + 2 started at setting 2
+        if self.applied_settings[
+            'focus_piezo_z_um'] != gui_settings['focus_piezo_z_um']:
+            new_settings[9] = (gui_settings['focus_piezo_z_um'], 'absolute')
+        if not self.XY_joystick_active:
+            if self.applied_settings[
+                'XY_stage_position_mm'] != gui_settings['XY_stage_position_mm']:
+                new_settings[10] = (gui_settings['XY_stage_position_mm'][0],
+                                    gui_settings['XY_stage_position_mm'][1],
                                     'absolute')
         # apply settings:
         if single_volume: new_settings[8] = 1
@@ -743,10 +774,14 @@ class GuiMicroscope:
             scan_range_um           = new_settings[7],
             volumes_per_buffer      = new_settings[8],
             focus_piezo_z_um        = new_settings[9],
-            XY_stage_position_mm    = new_settings[10]).join()
+            XY_stage_position_mm    = new_settings[10])
         # update settings attributes:
-        for k in self.settings.keys():
-            self.settings[k] = gui[k]
+        for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
+            self.applied_settings[k] = copy.deepcopy(gui_settings[k])
+        return None
+
+    def print_memory_and_time(self):
+        self.scope.apply_settings().join() # update attributes
         # calculate memory:
         total_memory_gb = 1e-9 * self.scope.total_bytes
         max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
@@ -760,14 +795,13 @@ class GuiMicroscope:
         acquire_time_s = (
             self.scope.buffer_time_s + self.delay_spinbox.spinbox_value)
         total_time_s = (
-            acquire_time_s * self.acquisitions_spinbox.spinbox_value)
-        if verbose:
-            print('Total memory needed   (GB) = %0.6f (%0.2f%% of max)'%(
-                total_memory_gb, memory_pct))
-            print('Total storaged needed (GB) = %0.6f'%total_storage_gb)
-            print('Total acquisition time (s) = %0.6f (%0.2f min)'%(
-                total_time_s, (total_time_s / 60)))            
-            print('Vps ~ %0.6f'%self.scope.volumes_per_s)
+            acquire_time_s * self.acquisitions_spinbox.spinbox_value)        
+        print('Total memory needed   (GB) = %0.6f (%0.2f%% of max)'%(
+            total_memory_gb, memory_pct))
+        print('Total storaged needed (GB) = %0.6f'%total_storage_gb)
+        print('Total acquisition time (s) = %0.6f (%0.2f min)'%(
+            total_time_s, (total_time_s / 60)))            
+        print('Vps ~ %0.6f'%self.scope.volumes_per_s)
         return None
 
     def loop_snoutfocus(self):
@@ -776,9 +810,10 @@ class GuiMicroscope:
         self.root.after(wait_ms, self.loop_snoutfocus)
         return None
 
-    def snap_volume(self, verbose=True):
-        self.apply_settings(single_volume=True, verbose=verbose)
-        self.scope.finish_all_tasks() # don't accumulate acquire tasks
+    def snap_volume(self):
+        self.apply_settings(single_volume=True)
+        self.print_memory_and_time()
+        self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire()
         return None
 
@@ -793,7 +828,9 @@ class GuiMicroscope:
 
     def snap_volume_and_save(self):
         self.apply_settings(single_volume=True)
+        self.print_memory_and_time()
         folder_name = self.get_folder_name() + '_snap'
+        self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire(filename='snap.tif',
                            folder_name=folder_name,
                            description=self.description_textbox.text)
@@ -806,73 +843,93 @@ class GuiMicroscope:
 
     def run_live_mode(self):
         if self.live_mode_enabled.get():
-            self.snap_volume(verbose=False)
+            self.apply_settings(single_volume=True, check_XY_stage=False)
+            self.last_acquire_task.join() # don't accumulate acquires
+            self.last_acquire_task = self.scope.acquire()
             self.root.after(self.gui_delay_ms, self.run_live_mode)
+        return None
+
+    def reset_XY_buttons(self):
+        self.gui_xy_stage.move_up = False
+        self.gui_xy_stage.move_down = False
+        self.gui_xy_stage.move_left = False
+        self.gui_xy_stage.move_right = False
         return None
 
     def init_scout_mode(self):
         self.live_mode_enabled.set(0)
+        if self.scout_mode_enabled.get():
+            self.reset_XY_buttons() # ignore any previous button presses
+            self.apply_settings(single_volume=True)
+            self.last_acquire_task.join() # don't accumulate acquires
+            self.last_acquire_task = self.scope.acquire()
         self.run_scout_mode()
+        return None
+
+    def check_XY_buttons(self):
+        def update_XY_position(): # only called if button pressed
+            self.XY_button_pressed = True
+            # current position:
+            XY_stage_position_mm = self.gui_xy_stage.position_mm
+            # calculate move size:
+            move_pct = self.gui_xy_stage.move_pct.spinbox_value / 100
+            scan_width_um = (
+                self.applied_settings['width_px'] * sols.sample_px_um)
+            ud_move_mm = (
+                1e-3 * self.applied_settings['scan_range_um'] * move_pct)
+            lr_move_mm = 1e-3 * scan_width_um * move_pct
+            # check which direction:
+            if self.XY_stage_last_move == 'up (+Y)':
+                move_mm = (0, ud_move_mm)
+            if self.XY_stage_last_move == 'down (-Y)':
+                move_mm = (0, -ud_move_mm)
+            if self.XY_stage_last_move == 'left (-X)':
+                move_mm = (-lr_move_mm, 0)
+            if self.XY_stage_last_move == 'right (+X)':
+                move_mm = (lr_move_mm, 0)
+            # update position and gui:
+            XY_stage_position_mm = tuple(map(sum, zip(
+                XY_stage_position_mm, move_mm)))
+            self.gui_xy_stage.update_position(XY_stage_position_mm)
+            self.reset_XY_buttons() # toggle buttons back
+        # run minimal code for speed:
+        self.XY_button_pressed = False
+        if self.gui_xy_stage.move_up:
+            self.XY_stage_last_move = 'up (+Y)'
+            update_XY_position()
+        elif self.gui_xy_stage.move_down:
+            self.XY_stage_last_move = 'down (-Y)'
+            update_XY_position()
+        elif self.gui_xy_stage.move_left:
+            self.XY_stage_last_move = 'left (-X)'
+            update_XY_position()
+        elif self.gui_xy_stage.move_right:
+            self.XY_stage_last_move = 'right (+X)'
+            update_XY_position()
         return None
 
     def run_scout_mode(self):
         if self.scout_mode_enabled.get():
+            def snap():
+                self.apply_settings(single_volume=True, check_XY_stage=False)
+                self.last_acquire_task.join() # don't accumulate acquires
+                self.last_acquire_task = self.scope.acquire()
             # Check Z:
-            Z = self.gui_focus_piezo.position_um.spinbox_value
-            if Z != self.settings['focus_piezo_z_um']:
-                self.snap_volume(verbose=False)
-            # Check XY:
-            def snap_volume_and_update_gui(gui_text): # save lines of code
-                self.snap_volume(verbose=False)
-                self.gui_xy_stage.update_last_move(gui_text)
-            # -> apply GUI move requests:
-            move_pct = self.gui_xy_stage.step_size_pct.spinbox_value / 100
-            self.scope.apply_settings().join() # update attributes
-            scan_width_um = self.scope.width_px * sols.sample_px_um
-            ud_move_mm = 1e-3 * self.scope.scan_range_um * move_pct
-            lr_move_mm = 1e-3 * scan_width_um * move_pct
-            if self.gui_xy_stage.move_up:
-                self.scope.apply_settings(
-                    XY_stage_position_mm=(0, ud_move_mm, 'relative'))
-                snap_volume_and_update_gui('up (+Y)')
-                self.gui_xy_stage.move_up = False
-            elif self.gui_xy_stage.move_down:
-                self.scope.apply_settings(
-                    XY_stage_position_mm=(0, -ud_move_mm, 'relative'))
-                snap_volume_and_update_gui('down (-Y)')
-                self.gui_xy_stage.move_down = False
-            elif self.gui_xy_stage.move_left:
-                self.scope.apply_settings(
-                    XY_stage_position_mm=(-lr_move_mm, 0, 'relative'))
-                snap_volume_and_update_gui('left (-X)')
-                self.gui_xy_stage.move_left = False
-            elif self.gui_xy_stage.move_right:
-                self.scope.apply_settings(
-                    XY_stage_position_mm=(lr_move_mm, 0, 'relative'))
-                snap_volume_and_update_gui('right (+X)')
-                self.gui_xy_stage.move_right = False
-            # -> check for joystick motion:
-            self.scope.apply_settings().join() # update attributes
-            X, Y = self.scope.XY_stage_position_mm
-            joystick_motion = False
-            if   X == self.XY_stage_x_min: # moving
-                snap_volume_and_update_gui('left (-X)')
-                joystick_motion = True
-            elif X == self.XY_stage_x_max: # moving
-                snap_volume_and_update_gui('right (+X)')
-                joystick_motion = True
-            elif Y == self.XY_stage_y_min: # moving
-                snap_volume_and_update_gui('down (-Y)')
-                joystick_motion = True
-            elif Y == self.XY_stage_y_max: # moving
-                snap_volume_and_update_gui('up (+Y)')
-                joystick_motion = True
-            if joystick_motion: # snap again to reduce motion blur
-                self.snap_volume(verbose=False)
-            else: # update position in gui (avoids erroneous position updates)
-                self.gui_xy_stage.update_position((X, Y))
-            # update attribute:
-            self.settings['XY_stage_position_mm'] = (X, Y)
+            focus_piezo_z_um = self.gui_focus_piezo.position_um.spinbox_value
+            if self.applied_settings['focus_piezo_z_um'] != focus_piezo_z_um:
+                snap()
+            # Check XY buttons:
+            self.check_XY_buttons()
+            if self.XY_button_pressed:
+                snap() # before gui update
+                self.gui_xy_stage.update_last_move(self.XY_stage_last_move)
+            # Check XY joystick:
+            XY_stage_position_mm = self.check_XY_stage()
+            if self.XY_joystick_active:
+                snap() # before gui update
+                self.gui_xy_stage.update_last_move(self.XY_stage_last_move)
+            else: # (avoids erroneous XY updates)
+                self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.root.after(self.gui_delay_ms, self.run_scout_mode)
         return None
 
@@ -883,6 +940,7 @@ class GuiMicroscope:
         self.cancel_aquisition.set(0)
         self.running_aquisition.set(1)
         self.apply_settings()
+        self.print_memory_and_time()
         self.folder_name = self.get_folder_name()
         self.description = self.description_textbox.text
         self.delay_s = self.delay_spinbox.spinbox_value
