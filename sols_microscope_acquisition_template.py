@@ -15,10 +15,10 @@ if __name__ == '__main__': # required block for sols_microscope
     scope.apply_settings(
         channels_per_slice=("LED",),# ('LED','405','488','561','640')
         power_per_channel=(10,),    # match channels 0-100% i.e. (5,0,20,30,100)
-        filter_wheel_position=0,    # reset later
-        ## filter wheel options:        0:blocked,      1:open
-        # 2:ET450/50M,  3:ET525/50M,    4:ET600/50M,    5:ET690/50M
-        # 6:ZETquadM,   7:LP02-488RU    8:LP02-561RU    9:empty
+        emission_filter='Shutter',  # reset later, options are:
+        # 'Shutter', 'Open'
+        # 'ET450/50M', 'ET525/50M', 'ET600/50M', 'ET690/50M'
+        # 'ZET405/488/561/640m', 'LP02-488RU', 'LP02-561RU', '(unused)'
         illumination_time_us=1*1e3, # reset later
         height_px=500,                          # 12 -> 500  (typical range)
         width_px=1020,                          # 60 -> 1020 (typical range)
@@ -86,7 +86,7 @@ if __name__ == '__main__': # required block for sols_microscope
             scope.apply_settings(illumination_time_us=1*1e3,
                                  channels_per_slice=('488',),
                                  power_per_channel=(5,),
-                                 filter_wheel_position=7)
+                                 emission_filter='LP02-488RU')
             scope.acquire(filename=filename488,
                           folder_name=folder_name,
                           description='488 something...',
@@ -95,7 +95,7 @@ if __name__ == '__main__': # required block for sols_microscope
             scope.apply_settings(illumination_time_us=1*1e3,
                                  channels_per_slice=('561',),
                                  power_per_channel=(5,),
-                                 filter_wheel_position=8)
+                                 emission_filter='LP02-561RU')
             scope.acquire(filename=filename561,
                           folder_name=folder_name,
                           description='561 something...',
