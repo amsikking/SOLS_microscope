@@ -51,10 +51,27 @@ class GuiLaserBox:
             default_value=5,
             row=3)
 
+class GuiDichroicMirror:
+    def __init__(self, master):
+        frame = tk.LabelFrame(master, text='DICHROIC MIRROR', bd=6)
+        frame.grid(row=3, column=0, padx=10, pady=10, sticky='n')
+        inner_frame = tk.LabelFrame(frame, text='fixed')
+        inner_frame.grid(row=0, column=0, padx=10, pady=10)
+        self.dichroic_mirror_options = ( # copy paste from sols_microscope
+            'ZT405/488/561/640rpc',)
+        self.current_dichroic_mirror = tk.StringVar()
+        self.current_dichroic_mirror.set('ZT405/488/561/640rpc') # set default
+        option_menu = tk.OptionMenu(
+            inner_frame,
+            self.current_dichroic_mirror,
+            *self.dichroic_mirror_options)
+        option_menu.config(width=50, height=2) # match to TL and lasers
+        option_menu.grid(row=0, column=0, padx=10, pady=10)
+
 class GuiFilterWheel:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='FILTER WHEEL', bd=6)
-        frame.grid(row=3, column=0, padx=10, pady=10, sticky='n')
+        frame.grid(row=4, column=0, padx=10, pady=10, sticky='n')
         inner_frame = tk.LabelFrame(frame, text='choice')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
         self.emission_filter_options = ( # copy paste from sols_microscope
@@ -138,7 +155,7 @@ class GuiCamera:
 class GuiGalvo:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='GALVO', bd=6)
-        frame.grid(row=3, column=1, padx=10, pady=10, sticky='n')
+        frame.grid(row=3, column=1, rowspan=2, padx=10, pady=10, sticky='n')
         slider_length = 380 # match to camera
         button_width, button_height = 10, 2
         # scan slider:
@@ -352,7 +369,7 @@ class GuiFocusPiezo:
 class GuiXYStage:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='XY STAGE', bd=6)
-        frame.grid(row=3, column=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=3, column=2, rowspan=2, padx=10, pady=10, sticky='n')
         # last move textbox:
         self.last_move = tkcw.Textbox(
             frame,
@@ -463,6 +480,7 @@ class GuiMicroscope:
         # load nested GUI's for each element:
         self.gui_transmitted_light  = GuiTransmittedLight(self.root)
         self.gui_laser_box          = GuiLaserBox(self.root)
+        self.gui_dichroic_mirror    = GuiDichroicMirror(self.root)
         self.gui_filter_wheel       = GuiFilterWheel(self.root)
         self.gui_galvo              = GuiGalvo(self.root)
         self.gui_camera             = GuiCamera(self.root)
@@ -506,7 +524,7 @@ class GuiMicroscope:
 
     def init_quit_button(self):
         quit_frame = tk.LabelFrame(self.root, text='QUIT', bd=6)
-        quit_frame.grid(row=3, column=5, padx=10, pady=10, sticky='s')
+        quit_frame.grid(row=4, column=5, padx=10, pady=10, sticky='s')
         quit_gui_button = tk.Button(
             quit_frame,
             text="QUIT GUI",
@@ -519,7 +537,7 @@ class GuiMicroscope:
         self.settings_frame = tk.LabelFrame(
             self.root, text='SETTINGS', bd=6)
         self.settings_frame.grid(
-            row=1, column=4, rowspan=3, padx=10, pady=10, sticky='n')
+            row=1, column=4, rowspan=2, padx=10, pady=10, sticky='n')
         self.settings_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
@@ -586,7 +604,7 @@ class GuiMicroscope:
         self.output_frame = tk.LabelFrame(
             self.root, text='SETTINGS OUTPUT', bd=6)
         self.output_frame.grid(
-            row=3, column=4, rowspan=3, padx=10, pady=10, sticky='n')
+            row=3, column=4, rowspan=2, padx=10, pady=10, sticky='n')
         self.output_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
@@ -639,7 +657,7 @@ class GuiMicroscope:
         self.aquisition_frame = tk.LabelFrame(
             self.root, text='ACQUISITION', bd=6)
         self.aquisition_frame.grid(
-            row=1, column=5, rowspan=3, padx=10, pady=10, sticky='n')
+            row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
         self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
@@ -838,11 +856,12 @@ class GuiMicroscope:
             file_settings[data.split(':')[0]] = data.split(':')[1:][0].lstrip()
         # re-format strings from file settings for gui:
         channels = file_settings[
-            'channels_per_slice'].split(',')
+            'channels_per_slice'].strip('(').strip(')').split(',')
         powers   = file_settings[
             'power_per_channel'].strip('(').strip(')').split(',')
         channels_per_slice, power_per_channel = [], []
         for i, c in enumerate(channels):
+            if c == '': break # avoid bug from tuple with single entry
             channels_per_slice.append(c.split("'")[1])
             power_per_channel.append(int(powers[i]))
         emission_filter = file_settings['emission_filter']
