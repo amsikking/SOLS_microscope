@@ -67,7 +67,8 @@ class Microscope:
         slow_fw_init.get_result()
         self.max_allocated_bytes = max_allocated_bytes
         self.illumination_sources = ( # configure as needed
-            'LED', '405', '488', '561', '640', '405_on_during_rolling')        
+            'LED', '405', '488', '561', '640', '405_on_during_rolling')
+        self.dichroic_mirror = 'ZT405/488/561/640rpc'
         self.max_bytes_per_buffer = (2**31) # legal tiff
         self.max_data_buffers = 4 # camera, preview, display, filesave
         self.max_preview_buffers = self.max_data_buffers
@@ -107,8 +108,18 @@ class Microscope:
         if self.verbose: print("\n%s: opening filter wheel..."%self.name)
         self.filter_wheel = sutter_Lambda_10_3.Controller(
             which_port='COM3', verbose=False)
-        if self.verbose: print("\n%s: -> filter wheel open."%self.name)        
-        self.filter_wheel_position = 0
+        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
+        self.emission_filter_options = {
+            'Shutter'               :0,
+            'Open'                  :1,
+            'ET450/50M'             :2,
+            'ET525/50M'             :3,
+            'ET600/50M'             :4,
+            'ET690/50M'             :5,
+            'ZET405/488/561/640m'   :6,
+            'LP02-488RU'            :7,
+            'LP02-561RU'            :8,
+            '(unused)'              :9}
         atexit.register(self.filter_wheel.close)
 
     def _init_camera(self):
@@ -285,7 +296,8 @@ class Microscope:
             'preview_only':preview_only,
             'channels_per_slice':tuple(self.channels_per_slice),
             'power_per_channel':tuple(self.power_per_channel),
-            'filter_wheel_position':self.filter_wheel_position,
+            'dichroic_mirror':self.dichroic_mirror,
+            'emission_filter':self.emission_filter,
             'illumination_time_us':self.illumination_time_us,
             'volumes_per_s':self.volumes_per_s,
             'buffer_time_s':self.buffer_time_s,
@@ -344,7 +356,7 @@ class Microscope:
         self,
         channels_per_slice=None,    # Tuple of strings
         power_per_channel=None,     # Tuple of floats
-        filter_wheel_position=None, # Int
+        emission_filter=None,       # String
         illumination_time_us=None,  # Float
         height_px=None,             # Int
         width_px=None,              # Int
@@ -400,10 +412,9 @@ class Microscope:
             else: # must update XY stage attributes if joystick was used
                 update_XY_stage_position_thread = ct.ResultThread(
                     target=self.XY_stage.get_position_mm).start()
-            if filter_wheel_position is not None:
-                self.filter_wheel.move(filter_wheel_position,
-                                       speed=6,
-                                       block=False)
+            if emission_filter is not None:
+                self.filter_wheel.move(
+                    self.emission_filter_options[emission_filter], block=False)
             if focus_piezo_z_um is not None:
                 assert focus_piezo_z_um[1] in ('relative', 'absolute')
                 z = focus_piezo_z_um[0]
@@ -446,7 +457,7 @@ class Microscope:
             if focus_piezo_z_um is not None:
                 self.focus_piezo._finish_moving()
                 self.focus_piezo_z_um = self.focus_piezo.z
-            if filter_wheel_position is not None:
+            if emission_filter is not None:
                 self.filter_wheel._finish_moving()
             if XY_stage_position_mm is not None:
                 self.XY_stage._finish_moving()
@@ -478,14 +489,15 @@ class Microscope:
                 return
             self._settings_applied = False # In case the thread crashes
             # Record the settings we'll have to reset:
-            old_fw_pos = self.filter_wheel_position
+            old_fw_pos = self.emission_filter_options[self.emission_filter]
             old_images = self.camera.num_images
             old_exp_us = self.camera.exposure_us
             old_roi_px = self.camera.roi_px
             old_timestamp = self.camera.timestamp_mode
             old_voltages = self.voltages
             # Get microscope settings ready to take our measurement:
-            self.filter_wheel.move(1, speed=6, block=False) # Empty slot
+            self.filter_wheel.move(
+                self.emission_filter_options['Open'], block=False)
             self.snoutfocus_piezo.set_voltage(0, block=False) # fw slower
             piezo_limit_v = 150 # 15 um for current piezo
             piezo_step_v = 2 # 200 nm steps
@@ -534,7 +546,7 @@ class Microscope:
             write_voltages_thread = ct.ResultThread(
                 target=self.ao._write_voltages,
                 args=(old_voltages,)).start()
-            self.filter_wheel.move(old_fw_pos, speed=6, block=False)
+            self.filter_wheel.move(old_fw_pos, block=False)
             # Inspect the images to find/set best snoutfocus piezo position:
             if np.max(data_buffer) < 5 * np.min(data_buffer):
                 print('\n%s: WARNING snoutfocus laser intensity low:'%self.name)
@@ -998,7 +1010,7 @@ if __name__ == '__main__':
     scope.apply_settings(       # Mandatory call
         channels_per_slice=("LED", "488"),
         power_per_channel=(50, 10),
-        filter_wheel_position=3,
+        emission_filter='ET525/50M',
         illumination_time_us=100,
         height_px=248,
         width_px=1060,
