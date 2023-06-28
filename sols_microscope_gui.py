@@ -518,6 +518,9 @@ class GuiMicroscope:
             # get scope ready:
             self.loop_snoutfocus()
             self.last_acquire_task = self.scope.acquire() # snap a volume
+            # make session folder:
+            dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+            self.session_folder = dt + 'sols_gui_session\\'
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
@@ -1008,7 +1011,7 @@ class GuiMicroscope:
     def snap_volume_and_save(self):
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
-        folder_name = self.get_folder_name() + '_snap'
+        folder_name = self.session_folder + self.get_folder_name() + '_snap'
         self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire(filename='snap.tif',
                            folder_name=folder_name,
@@ -1127,7 +1130,7 @@ class GuiMicroscope:
         self.running_aquisition.set(1)
         self.apply_settings()
         self.update_gui_settings_output()
-        self.folder_name = self.get_folder_name()
+        self.folder_name = self.session_folder + self.get_folder_name()
         self.description = self.description_textbox.text
         self.delay_s = self.delay_spinbox.spinbox_value.get()
         self.acquisitions = self.acquisitions_spinbox.spinbox_value.get()
