@@ -486,6 +486,8 @@ class GuiMicroscope:
         self.gui_camera             = GuiCamera(self.root)
         self.gui_focus_piezo        = GuiFocusPiezo(self.root)
         self.gui_xy_stage           = GuiXYStage(self.root)
+        # grey out XY stage buttons if not in scout mode:
+        self.enable_XY_buttons(False)
         # load settings, acquisition and quit:
         self.init_gui_settings()        # collects settings from GUI
         self.init_gui_settings_output() # shows output from settings
@@ -1068,17 +1070,19 @@ class GuiMicroscope:
             self.root.after(self.gui_delay_ms, self.run_live_mode)
         return None
 
-    def reset_XY_buttons(self):
-        self.gui_xy_stage.move_up = False
-        self.gui_xy_stage.move_down = False
-        self.gui_xy_stage.move_left = False
-        self.gui_xy_stage.move_right = False
+    def enable_XY_buttons(self, enable): # pass True or False
+        state = 'normal'
+        if not enable: state = 'disabled'
+        self.gui_xy_stage.button_up.config(state=state)
+        self.gui_xy_stage.button_down.config(state=state)
+        self.gui_xy_stage.button_left.config(state=state)
+        self.gui_xy_stage.button_right.config(state=state)
         return None
 
     def init_scout_mode(self):
         self.auto_update_settings_enabled.set(0)
         self.live_mode_enabled.set(0)
-        self.reset_XY_buttons() # ignore any previous button presses
+        self.enable_XY_buttons(True)
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()        
         if self.scout_mode_enabled.get():
@@ -1112,7 +1116,11 @@ class GuiMicroscope:
             XY_stage_position_mm = tuple(map(sum, zip(
                 XY_stage_position_mm, move_mm)))
             self.gui_xy_stage.update_position(XY_stage_position_mm)
-            self.reset_XY_buttons() # toggle buttons back
+            # toggle buttons back:
+            self.gui_xy_stage.move_up    = False
+            self.gui_xy_stage.move_down  = False
+            self.gui_xy_stage.move_left  = False
+            self.gui_xy_stage.move_right = False
         # run minimal code for speed:
         self.XY_button_pressed = False
         if self.gui_xy_stage.move_up:
@@ -1153,6 +1161,8 @@ class GuiMicroscope:
             else: # (avoids erroneous XY updates)
                 self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.root.after(self.gui_delay_ms, self.run_scout_mode)
+        else:
+            self.enable_XY_buttons(False)
         return None
 
     def init_acquisition(self):
