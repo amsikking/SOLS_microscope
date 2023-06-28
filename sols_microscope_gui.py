@@ -505,6 +505,8 @@ class GuiMicroscope:
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.XY_joystick_active = False
             self.XY_stage_last_move = 'None'
+            self.focus_piezo_position_list = []
+            self.XY_stage_position_list = []
             # get XY stage limits for feedback in scout mode:
             self.XY_stage_x_min = self.scope.XY_stage.x_min
             self.XY_stage_y_min = self.scope.XY_stage.y_min
@@ -518,9 +520,16 @@ class GuiMicroscope:
             # get scope ready:
             self.loop_snoutfocus()
             self.last_acquire_task = self.scope.acquire() # snap a volume
-            # make session folder:
+            # make session folder and position lists:
             dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
             self.session_folder = dt + 'sols_gui_session\\'
+            os.makedirs(self.session_folder)
+            with open(self.session_folder +
+                  "XY_stage_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
+            with open(self.session_folder +
+                  "focus_piezo_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
@@ -1002,20 +1011,45 @@ class GuiMicroscope:
     def get_folder_name(self):
         dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
         folder_index = 0
-        folder_name = dt + '%03i_'%folder_index + self.label_textbox.text
+        folder_name = (
+            self.session_folder + dt +
+            '%03i_'%folder_index + self.label_textbox.text)
         while os.path.exists(folder_name): # check before overwriting
             folder_index +=1
-            folder_name = dt + '%03i_'%folder_index + self.label_textbox.text
+            folder_name = (
+                self.session_folder + dt +
+                '%03i_'%folder_index + self.label_textbox.text)
         return folder_name
+
+    def update_position_list(self):
+        num_folders   = len(next(os.walk(self.session_folder))[1])
+        num_positions = len(self.focus_piezo_position_list)
+        if num_folders == (num_positions + 1): # folder has landed on disk
+            # update list:
+            self.focus_piezo_position_list.append(
+                self.applied_settings['focus_piezo_z_um'])
+            self.XY_stage_position_list.append(
+                self.applied_settings['XY_stage_position_mm'])
+            # write to file:
+            with open(self.session_folder +
+                      "XY_stage_position_list.txt", "a") as file:
+                file.write(str(self.XY_stage_position_list[-1]) + ',\n')
+            with open(self.session_folder +
+                      "focus_piezo_position_list.txt", "a") as file:
+                file.write(str(self.focus_piezo_position_list[-1]) + ',\n')
+        else: # wait for folder
+            self.root.after(self.gui_delay_ms, self.update_position_list)
+        return None
 
     def snap_volume_and_save(self):
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
-        folder_name = self.session_folder + self.get_folder_name() + '_snap'
+        folder_name = self.get_folder_name() + '_snap'
         self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire(filename='snap.tif',
                            folder_name=folder_name,
                            description=self.description_textbox.text)
+        self.update_position_list()
         return None
 
     def init_live_mode(self):
@@ -1130,7 +1164,7 @@ class GuiMicroscope:
         self.running_aquisition.set(1)
         self.apply_settings()
         self.update_gui_settings_output()
-        self.folder_name = self.session_folder + self.get_folder_name()
+        self.folder_name = self.get_folder_name()
         self.description = self.description_textbox.text
         self.delay_s = self.delay_spinbox.spinbox_value.get()
         self.acquisitions = self.acquisitions_spinbox.spinbox_value.get()
@@ -1145,6 +1179,7 @@ class GuiMicroscope:
                            folder_name=self.folder_name,
                            description=self.description,
                            delay_s=delay_s)
+        self.update_position_list()
         self.acquisition_count += 1
         if (self.acquisition_count < self.acquisitions
             and not self.cancel_aquisition.get()): # acquire again
