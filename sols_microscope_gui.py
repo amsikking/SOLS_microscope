@@ -295,43 +295,43 @@ class GuiFocusPiezo:
             rowspan=5)
         button_width, button_height = 10, 2
         # up buttons:
-        button_large_move_up = tk.Button(
+        self.button_large_move_up = tk.Button(
             frame,
             text="up %ium"%self.large_move,
             command=self.large_move_up,
             width=button_width,
             height=button_height)
-        button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
-        button_small_move_up = tk.Button(
+        self.button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
+        self.button_small_move_up = tk.Button(
             frame,
             text="up %ium"%self.small_move,
             command=self.small_move_up,
             width=button_width,
             height=button_height)
-        button_small_move_up.grid(row=1, column=1, sticky='s')
+        self.button_small_move_up.grid(row=1, column=1, sticky='s')
         # center button:
-        button_center_move = tk.Button(
+        self.button_center_move = tk.Button(
             frame,
             text="center",
             command=self.move_center,
             width=button_width,
             height=button_height)
-        button_center_move.grid(row=2, column=1, padx=5, pady=5)
+        self.button_center_move.grid(row=2, column=1, padx=5, pady=5)
         # down buttons:
-        button_small_move_down = tk.Button(
+        self.button_small_move_down = tk.Button(
             frame,
             text="down %ium"%self.small_move,
             command=self.small_move_down,
             width=button_width,
             height=button_height)
-        button_small_move_down.grid(row=3, column=1, sticky='n')
-        button_large_move_down = tk.Button(
+        self.button_small_move_down.grid(row=3, column=1, sticky='n')
+        self.button_large_move_down = tk.Button(
             frame,
             text="down %ium"%self.large_move,
             command=self.large_move_down,
             width=button_width,
             height=button_height)
-        button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
+        self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
 
     def large_move_up(self):
         up_value = self.position_um.spinbox_value.get() - self.large_move
@@ -486,13 +486,14 @@ class GuiMicroscope:
         self.gui_camera             = GuiCamera(self.root)
         self.gui_focus_piezo        = GuiFocusPiezo(self.root)
         self.gui_xy_stage           = GuiXYStage(self.root)
-        # grey out XY stage buttons if not in scout mode:
-        self.enable_XY_buttons(False)
         # load settings, acquisition and quit:
         self.init_gui_settings()        # collects settings from GUI
         self.init_gui_settings_output() # shows output from settings
+        self.init_gui_position_list()   # navigates position lists
         self.init_gui_acquisition()     # microscope methods
         self.init_quit_button()
+        # grey out XYZ navigation buttons if not in scout mode:
+        self.enable_XYZ_navigation_buttons(False)
         # get settings from gui:
         gui_settings = self.get_gui_settings()
         if init_microscope:
@@ -527,10 +528,10 @@ class GuiMicroscope:
             self.session_folder = dt + 'sols_gui_session\\'
             os.makedirs(self.session_folder)
             with open(self.session_folder +
-                  "XY_stage_position_list.txt", "w") as file:
+                  "focus_piezo_position_list.txt", "w") as file:
                 file.write(self.session_folder + '\n')
             with open(self.session_folder +
-                  "focus_piezo_position_list.txt", "w") as file:
+                  "XY_stage_position_list.txt", "w") as file:
                 file.write(self.session_folder + '\n')
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
@@ -538,7 +539,8 @@ class GuiMicroscope:
 
     def init_quit_button(self):
         quit_frame = tk.LabelFrame(self.root, text='QUIT', bd=6)
-        quit_frame.grid(row=4, column=5, padx=10, pady=10, sticky='s')
+        quit_frame.grid(
+            row=6, column=0, columnspan=6, padx=10, pady=10, sticky='n')
         quit_gui_button = tk.Button(
             quit_frame,
             text="QUIT GUI",
@@ -558,7 +560,7 @@ class GuiMicroscope:
         # load from file:
         load_from_file_button = tk.Button(
             self.settings_frame,
-            text="Load from file (XYZ ignored)",
+            text="Load from metadata file",
             command=self.load_settings_from_file,
             width=button_width,
             height=button_height)
@@ -667,11 +669,97 @@ class GuiMicroscope:
             height=1)
         return None
 
+    def init_gui_position_list(self):
+        self.positions_frame = tk.LabelFrame(
+            self.root, text='POSITION LIST', bd=6)
+        self.positions_frame.grid(
+            row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        self.positions_frame.bind('<Enter>', self.get_tkfocus) # force update
+        button_width, button_height = 25, 2
+        spinbox_width = 20
+        # load from folder:
+        load_from_folder_button = tk.Button(
+            self.positions_frame,
+            text="Load from session folder",
+            command=self.load_positions_from_folder,
+            width=button_width,
+            height=button_height)
+        load_from_folder_button.grid(row=0, column=0, padx=10, pady=10)
+        # total positions:
+        self.total_positions_spinbox = tkcw.CheckboxSliderSpinbox(
+            self.positions_frame,
+            label='Total positions',
+            checkbox_enabled=False,
+            slider_enabled=False,
+            min_value=0,
+            max_value=1e6,
+            default_value=0,
+            row=1,
+            width=spinbox_width)
+        self.total_positions_spinbox.spinbox.config(state='disabled')
+        # move to start:
+        self.move_to_start_button = tk.Button(
+            self.positions_frame,
+            text="Move to start",
+            command=self.move_to_start_position,
+            width=button_width,
+            height=button_height)
+        self.move_to_start_button.grid(row=2, column=0, padx=10, pady=10)
+        # move back:
+        self.move_back_button = tk.Button(
+            self.positions_frame,
+            text="Move back",
+            command=self.move_back_one_position,
+            width=button_width,
+            height=button_height)
+        self.move_back_button.grid(row=3, column=0, padx=10, pady=10)
+        # current position:
+        self.current_position_spinbox = tkcw.CheckboxSliderSpinbox(
+            self.positions_frame,
+            label='Current position',
+            checkbox_enabled=False,
+            slider_enabled=False,
+            min_value=0,
+            max_value=1e6,
+            default_value=0,
+            row=4,
+            width=spinbox_width)
+        self.current_position_spinbox.spinbox.config(state='disabled')
+        # go forwards:
+        self.move_forward_button = tk.Button(
+            self.positions_frame,
+            text="Move forward",
+            command=self.move_forward_one_position,
+            width=button_width,
+            height=button_height)
+        self.move_forward_button.grid(row=5, column=0, padx=10, pady=10)
+        # move to end:
+        self.move_to_end_button = tk.Button(
+            self.positions_frame,
+            text="Move to end",
+            command=self.move_to_end_position,
+            width=button_width,
+            height=button_height)
+        self.move_to_end_button.grid(row=6, column=0, padx=10, pady=10)
+        return None
+
+    def move_to_start_position(self):
+        self.move_to_start_position = True
+        
+    def move_back_one_position(self):
+        self.move_back_one_position = True
+        
+    def move_forward_one_position(self):
+        self.move_forward_one_position = True
+
+    def move_to_end_position(self):
+        self.move_to_end_position = True
+
     def init_gui_acquisition(self):
         self.aquisition_frame = tk.LabelFrame(
             self.root, text='ACQUISITION', bd=6)
         self.aquisition_frame.grid(
-            row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+            row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
         self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
@@ -854,6 +942,7 @@ class GuiMicroscope:
         # update settings attributes:
         for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
             self.applied_settings[k] = copy.deepcopy(gui_settings[k])
+        if single_volume: self.applied_settings['volumes_per_buffer'] = 1
         return None
 
     def load_settings_from_file(self):
@@ -954,6 +1043,39 @@ class GuiMicroscope:
         self.apply_settings(check_XY_stage=False)
         return None
 
+    def load_positions_from_folder(self):
+        # get folder from user:
+        folder_path = tk.filedialog.askdirectory(
+            parent=self.root,
+            initialdir=os.getcwd(),
+            title='Please choose a previous "gui session" folder')
+        # read files and parse positions into lists:
+        focus_piezo_file_path = folder_path + '\\focus_piezo_position_list.txt'
+        XY_stage_file_path = folder_path + '\\XY_stage_position_list.txt'
+        with open(focus_piezo_file_path, 'r') as file:
+            focus_piezo_position_list = file.read().splitlines()[1:] # skip 1st
+        with open(XY_stage_file_path, 'r') as file:
+            XY_stage_position_list = file.read().splitlines()[1:] # skip 1st
+        for i, position in enumerate(focus_piezo_position_list):
+            focus_piezo_position_list[i] = int(position.strip(','))
+        for i, position in enumerate(XY_stage_position_list):
+            XY_stage_position_list[i] = [
+                float(position.strip('[').strip(']').split(',')[0]),
+                float(position.strip('[').split(',')[1].strip(']').lstrip())]
+        # reset gui to position zero:
+        total_positions = len(focus_piezo_position_list)
+        self.total_positions_spinbox.spinbox_value.set(total_positions)
+        self.current_position_spinbox.spinbox_value.set(0)
+        if total_positions != 0:
+            self.gui_focus_piezo.update_position(focus_piezo_position_list[0])
+            self.gui_xy_stage.update_position(XY_stage_position_list[0])
+        # update attributes:
+        self.focus_piezo_position_list = focus_piezo_position_list
+        self.XY_stage_position_list = XY_stage_position_list
+        # apply the file settings:
+        self.apply_settings()
+        return None
+
     def update_gui_settings_output(self):
         self.scope.apply_settings().join() # update attributes
         # volumes per second:
@@ -1032,13 +1154,17 @@ class GuiMicroscope:
                 self.applied_settings['focus_piezo_z_um'])
             self.XY_stage_position_list.append(
                 self.applied_settings['XY_stage_position_mm'])
+            # update gui:
+            positions = len(self.focus_piezo_position_list)
+            self.total_positions_spinbox.spinbox_value.set(positions)
+            self.current_position_spinbox.spinbox_value.set(positions)
             # write to file:
-            with open(self.session_folder +
-                      "XY_stage_position_list.txt", "a") as file:
-                file.write(str(self.XY_stage_position_list[-1]) + ',\n')
             with open(self.session_folder +
                       "focus_piezo_position_list.txt", "a") as file:
                 file.write(str(self.focus_piezo_position_list[-1]) + ',\n')
+            with open(self.session_folder +
+                      "XY_stage_position_list.txt", "a") as file:
+                file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         else: # wait for folder
             self.root.after(self.gui_delay_ms, self.update_position_list)
         return None
@@ -1070,19 +1196,33 @@ class GuiMicroscope:
             self.root.after(self.gui_delay_ms, self.run_live_mode)
         return None
 
-    def enable_XY_buttons(self, enable): # pass True or False
+    def enable_XYZ_navigation_buttons(self, enable): # pass True or False
         state = 'normal'
         if not enable: state = 'disabled'
+        # focus:
+        for child in self.gui_focus_piezo.position_um.winfo_children():
+            child.configure(state=state)
+        self.gui_focus_piezo.button_large_move_up.config(state=state)
+        self.gui_focus_piezo.button_small_move_up.config(state=state)
+        self.gui_focus_piezo.button_center_move.config(state=state)
+        self.gui_focus_piezo.button_small_move_down.config(state=state)
+        self.gui_focus_piezo.button_large_move_down.config(state=state)
+        # XY stage:
         self.gui_xy_stage.button_up.config(state=state)
         self.gui_xy_stage.button_down.config(state=state)
         self.gui_xy_stage.button_left.config(state=state)
         self.gui_xy_stage.button_right.config(state=state)
+        # position list:
+        self.move_to_start_button.config(state=state)
+        self.move_back_button.config(state=state)
+        self.move_forward_button.config(state=state)
+        self.move_to_end_button.config(state=state)
         return None
 
     def init_scout_mode(self):
         self.auto_update_settings_enabled.set(0)
         self.live_mode_enabled.set(0)
-        self.enable_XY_buttons(True)
+        self.enable_XYZ_navigation_buttons(True)
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()        
         if self.scout_mode_enabled.get():
@@ -1094,6 +1234,11 @@ class GuiMicroscope:
     def check_XY_buttons(self):
         def update_XY_position(): # only called if button pressed
             self.XY_button_pressed = True
+            # toggle buttons back:
+            self.gui_xy_stage.move_up    = False
+            self.gui_xy_stage.move_down  = False
+            self.gui_xy_stage.move_left  = False
+            self.gui_xy_stage.move_right = False
             # current position:
             XY_stage_position_mm = self.gui_xy_stage.position_mm
             # calculate move size:
@@ -1116,11 +1261,6 @@ class GuiMicroscope:
             XY_stage_position_mm = tuple(map(sum, zip(
                 XY_stage_position_mm, move_mm)))
             self.gui_xy_stage.update_position(XY_stage_position_mm)
-            # toggle buttons back:
-            self.gui_xy_stage.move_up    = False
-            self.gui_xy_stage.move_down  = False
-            self.gui_xy_stage.move_left  = False
-            self.gui_xy_stage.move_right = False
         # run minimal code for speed:
         self.XY_button_pressed = False
         if self.gui_xy_stage.move_up:
@@ -1135,6 +1275,56 @@ class GuiMicroscope:
         elif self.gui_xy_stage.move_right:
             self.XY_stage_last_move = 'right (+X)'
             update_XY_position()
+        return None
+
+    def check_position_buttons(self):
+        def update_position(go_to): # only called if button pressed
+            # toggle buttons back:
+            self.move_to_start_position     = False
+            self.move_back_one_position     = False
+            self.move_forward_one_position  = False
+            self.move_to_end_position       = False            
+            # check total and current position:
+            total_positions  = self.total_positions_spinbox.spinbox_value.get()
+            current_position = self.current_position_spinbox.spinbox_value.get()
+            if total_positions == 0:
+                return None
+            self.position_button_pressed = True
+            # check which direction:
+            if go_to == 'start':
+                new_position = 1
+            if go_to == 'back':
+                if current_position > 1:
+                    new_position = current_position - 1
+                else:
+                    new_position = current_position
+                    self.position_button_pressed = False
+            if go_to == 'forward':
+                if current_position < total_positions:
+                    new_position = current_position + 1
+                else:
+                    new_position = current_position
+                    self.position_button_pressed = False
+            if go_to == 'end':
+                new_position = total_positions
+            index = new_position - 1
+            # get positions:
+            focus_piezo_z_um = self.focus_piezo_position_list[index]
+            XY_stage_position_mm = self.XY_stage_position_list[index]
+            # update gui:
+            self.gui_focus_piezo.update_position(focus_piezo_z_um)
+            self.gui_xy_stage.update_position(XY_stage_position_mm)
+            self.current_position_spinbox.spinbox_value.set(new_position)
+        # run minimal code for speed:
+        self.position_button_pressed = False
+        if self.move_to_start_position:
+            update_position('start')
+        elif self.move_back_one_position:
+            update_position('back')
+        elif self.move_forward_one_position:
+            update_position('forward')
+        elif self.move_to_end_position:
+            update_position('end')
         return None
 
     def run_scout_mode(self):
@@ -1153,6 +1343,10 @@ class GuiMicroscope:
             if self.XY_button_pressed:
                 snap() # before gui update
                 self.gui_xy_stage.update_last_move(self.XY_stage_last_move)
+            # Check position buttons:
+            self.check_position_buttons()
+            if self.position_button_pressed:
+                snap()
             # Check XY joystick:
             XY_stage_position_mm = self.check_XY_stage()
             if self.XY_joystick_active:
@@ -1162,7 +1356,7 @@ class GuiMicroscope:
                 self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.root.after(self.gui_delay_ms, self.run_scout_mode)
         else:
-            self.enable_XY_buttons(False)
+            self.enable_XYZ_navigation_buttons(False)
         return None
 
     def init_acquisition(self):
