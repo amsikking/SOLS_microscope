@@ -479,8 +479,8 @@ class Microscope:
             custody.switch_from(None, to=self.camera) # Safe to change settings
             if delay_s is not None:
                 start_time = time.perf_counter()
-                if delay_s > 3: # 3 seconds is def. enough time to focus
-                    time.sleep(delay_s - 3)
+                if delay_s > 5: # 5 seconds to focus + settle vibrations
+                    time.sleep(delay_s - 5)
             if not self._settings_applied:
                 print("\n%s: ***WARNING*** -> settings not applied"%self.name)
                 print("%s: -> please apply legal settings"%self.name)
@@ -596,7 +596,7 @@ class Microscope:
                 display=True,       # Optional turn off
                 preview_only=False):# Save preview only, raw data discarded
         delay_during_acquire = True # default apply delay_s during acquire task
-        if delay_s is not None and delay_s > 3:
+        if delay_s is not None and delay_s > 30:
             self.snoutfocus(delay_s=delay_s) # Run snoutfocus for longer delays
             delay_during_acquire = False # snoutfocus will apply the delay_s
         def acquire_task(custody):
