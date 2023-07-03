@@ -334,13 +334,13 @@ class GuiFocusPiezo:
         self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
 
     def large_move_up(self):
-        up_value = self.position_um.spinbox_value.get() - self.large_move
+        up_value = self.position_um.valid_spinbox_value - self.large_move
         if self.min <= up_value <= self.max:
             self.update_position(up_value)
         return None
     
     def small_move_up(self):
-        up_value = self.position_um.spinbox_value.get() - self.small_move
+        up_value = self.position_um.valid_spinbox_value - self.small_move
         if self.min <= up_value <= self.max:
             self.update_position(up_value)
         return None
@@ -350,13 +350,13 @@ class GuiFocusPiezo:
         return None
 
     def small_move_down(self):
-        down_value = self.position_um.spinbox_value.get() + self.small_move
+        down_value = self.position_um.valid_spinbox_value + self.small_move
         if self.min <= down_value <= self.max:
             self.update_position(down_value)
         return None
 
     def large_move_down(self):
-        down_value = self.position_um.spinbox_value.get() + self.large_move
+        down_value = self.position_um.valid_spinbox_value + self.large_move
         if self.min <= down_value <= self.max:
             self.update_position(down_value)
         return None
@@ -832,39 +832,39 @@ class GuiMicroscope:
         if self.gui_transmitted_light.power.checkbox_value.get():
             channels_per_slice.append('LED')
             power_per_channel.append(
-                self.gui_transmitted_light.power.spinbox_value.get())
+                self.gui_transmitted_light.power.valid_spinbox_value)
         if self.gui_laser_box.power405.checkbox_value.get():
             channels_per_slice.append('405')
             power_per_channel.append(
-                self.gui_laser_box.power405.spinbox_value.get())
+                self.gui_laser_box.power405.valid_spinbox_value)
         if self.gui_laser_box.power488.checkbox_value.get():
             channels_per_slice.append('488')
             power_per_channel.append(
-                self.gui_laser_box.power488.spinbox_value.get())
+                self.gui_laser_box.power488.valid_spinbox_value)
         if self.gui_laser_box.power561.checkbox_value.get():
             channels_per_slice.append('561')
             power_per_channel.append(
-                self.gui_laser_box.power561.spinbox_value.get())
+                self.gui_laser_box.power561.valid_spinbox_value)
         if self.gui_laser_box.power640.checkbox_value.get():
             channels_per_slice.append('640')
             power_per_channel.append(
-                self.gui_laser_box.power640.spinbox_value.get())
+                self.gui_laser_box.power640.valid_spinbox_value)
         if len(channels_per_slice) == 0: # default TL if nothing selected
             self.gui_transmitted_light.power.checkbox_value.set(1)
             channels_per_slice = ('LED',)
             power_per_channel = (
-                self.gui_transmitted_light.power.spinbox_value.get(),)
+                self.gui_transmitted_light.power.valid_spinbox_value,)
         emission_filter = self.gui_filter_wheel.current_emission_filter.get()
         illumination_time_us = (
-            1000 * self.gui_camera.illumination_time_ms.spinbox_value.get()
-            + self.gui_camera.illumination_time_us.spinbox_value.get())
-        height_px = self.gui_camera.height_px.spinbox_value.get()
-        width_px  = self.gui_camera.width_px.spinbox_value.get()
+            1000 * self.gui_camera.illumination_time_ms.valid_spinbox_value
+            + self.gui_camera.illumination_time_us.valid_spinbox_value)
+        height_px = self.gui_camera.height_px.valid_spinbox_value
+        width_px  = self.gui_camera.width_px.valid_spinbox_value
         voxel_aspect_ratio = (
-            self.gui_galvo.voxel_aspect_ratio.spinbox_value.get())
-        scan_range_um = self.gui_galvo.scan_range_um.spinbox_value.get()
-        volumes_per_buffer = self.volumes_spinbox.spinbox_value.get()
-        focus_piezo_z_um = self.gui_focus_piezo.position_um.spinbox_value.get()
+            self.gui_galvo.voxel_aspect_ratio.valid_spinbox_value)
+        scan_range_um = self.gui_galvo.scan_range_um.valid_spinbox_value
+        volumes_per_buffer = self.volumes_spinbox.valid_spinbox_value
+        focus_piezo_z_um = self.gui_focus_piezo.position_um.valid_spinbox_value
         XY_stage_position_mm = self.gui_xy_stage.position_mm
         # settings:
         gui_settings = {'channels_per_slice'    :channels_per_slice,
@@ -969,9 +969,12 @@ class GuiMicroscope:
             power_per_channel.append(int(powers[i]))
         emission_filter = file_settings['emission_filter']
         total_illumination_time_us = int(file_settings['illumination_time_us'])
-        illumination_time_ms = int(int(total_illumination_time_us / 1000))
+        illumination_time_ms = int(total_illumination_time_us / 1000)
         illumination_time_us = (
             total_illumination_time_us - 1000 * illumination_time_ms)
+        if illumination_time_us == 0:
+            illumination_time_us = 1000
+            illumination_time_ms -= 1
         height_px = int(file_settings['height_px'])
         width_px = int(file_settings['width_px'])
         voxel_aspect_ratio = int(round(float(
@@ -1093,15 +1096,15 @@ class GuiMicroscope:
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
         total_storage_gb = (data_gb + preview_gb) * (
-            self.acquisitions_spinbox.spinbox_value.get())
+            self.acquisitions_spinbox.valid_spinbox_value)
         text = '%0.3f'%total_storage_gb
         self.total_storage_textbox.textbox.delete('1.0', '10.0')
         self.total_storage_textbox.textbox.insert('1.0', text)        
         # calculate time:
         acquire_time_s = (self.scope.buffer_time_s +
-                          self.delay_spinbox.spinbox_value.get())
+                          self.delay_spinbox.valid_spinbox_value)
         total_time_s = (
-            acquire_time_s * self.acquisitions_spinbox.spinbox_value.get())
+            acquire_time_s * self.acquisitions_spinbox.valid_spinbox_value)
         text = '%0.6f (%0.0f min)'%(total_time_s, (total_time_s / 60))
         self.total_time_textbox.textbox.delete('1.0', '10.0')
         self.total_time_textbox.textbox.insert('1.0', text)
@@ -1242,7 +1245,7 @@ class GuiMicroscope:
             # current position:
             XY_stage_position_mm = self.gui_xy_stage.position_mm
             # calculate move size:
-            move_pct = self.gui_xy_stage.move_pct.spinbox_value.get() / 100
+            move_pct = self.gui_xy_stage.move_pct.valid_spinbox_value / 100
             scan_width_um = (
             self.applied_settings['width_px'] * sols.sample_px_um)
             ud_move_mm = (
@@ -1285,8 +1288,8 @@ class GuiMicroscope:
             self.move_forward_one_position  = False
             self.move_to_end_position       = False            
             # check total and current position:
-            total_positions  = self.total_positions_spinbox.spinbox_value.get()
-            current_position = self.current_position_spinbox.spinbox_value.get()
+            total_positions  = self.total_positions_spinbox.valid_spinbox_value
+            current_position = self.current_position_spinbox.valid_spinbox_value
             if total_positions == 0:
                 return None
             self.position_button_pressed = True
@@ -1335,7 +1338,7 @@ class GuiMicroscope:
                 self.last_acquire_task = self.scope.acquire()
             # Check Z:
             focus_piezo_z_um = (
-                self.gui_focus_piezo.position_um.spinbox_value.get())
+                self.gui_focus_piezo.position_um.valid_spinbox_value)
             if self.applied_settings['focus_piezo_z_um'] != focus_piezo_z_um:
                 snap()
             # Check XY buttons:
@@ -1370,8 +1373,8 @@ class GuiMicroscope:
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name()
         self.description = self.description_textbox.text
-        self.delay_s = self.delay_spinbox.spinbox_value.get()
-        self.acquisitions = self.acquisitions_spinbox.spinbox_value.get()
+        self.delay_s = self.delay_spinbox.valid_spinbox_value
+        self.acquisitions = self.acquisitions_spinbox.valid_spinbox_value
         self.acquisition_count = 0
         self.run_acquisition()
         return None
