@@ -17,7 +17,8 @@ class GuiTransmittedLight:
             label='470-850nm (%)',
             checkbox_default=True,
             slider_length=200,
-            default_value=25)
+            default_value=25,
+            width=5)
 
 class GuiLaserBox:
     def __init__(self, master):
@@ -28,28 +29,32 @@ class GuiLaserBox:
             label='405nm (%)',
             color='magenta',
             slider_length=200,
-            default_value=5)
+            default_value=5,
+            width=5)
         self.power488 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='488nm (%)',
             color='blue',
             slider_length=200,
             default_value=5,
-            row=1)
+            row=1,
+            width=5)
         self.power561 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='561nm (%)',
             color='green',
             slider_length=200,
             default_value=5,
-            row=2)
+            row=2,
+            width=5)
         self.power640 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='640nm (%)',
             color='red',
             slider_length=200,
             default_value=5,
-            row=3)
+            row=3,
+            width=5)
 
 class GuiDichroicMirror:
     def __init__(self, master):
@@ -65,7 +70,7 @@ class GuiDichroicMirror:
             inner_frame,
             self.current_dichroic_mirror,
             *self.dichroic_mirror_options)
-        option_menu.config(width=50, height=2) # match to TL and lasers
+        option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)
 
 class GuiFilterWheel:
@@ -91,7 +96,7 @@ class GuiFilterWheel:
             inner_frame,
             self.current_emission_filter,
             *self.emission_filter_options)
-        option_menu.config(width=50, height=2) # match to TL and lasers
+        option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)        
 
 class GuiCamera:
@@ -108,7 +113,8 @@ class GuiCamera:
             max_value=1000,
             default_value=1000,
             columnspan=2,
-            row=0)
+            row=0,
+            width=5)
         self.illumination_time_ms = tkcw.CheckboxSliderSpinbox(
             frame,
             label='+ illumination time (ms)',
@@ -119,7 +125,8 @@ class GuiCamera:
             max_value=1000,
             default_value=0,
             columnspan=2,
-            row=1)
+            row=1,
+            width=5)
         self.height_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='height pixels',
@@ -131,7 +138,8 @@ class GuiCamera:
             min_value=12,
             max_value=500,
             default_value=250,
-            row=2)
+            row=2,
+            width=5)
         self.width_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='width pixels',
@@ -143,7 +151,8 @@ class GuiCamera:
             default_value=1000,
             row=3,
             column=1,
-            sticky='s')
+            sticky='s',
+            width=5)
         tkcw.CanvasRectangleSliderTrace2D(
             frame,
             self.width_px,
@@ -156,7 +165,7 @@ class GuiGalvo:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='GALVO', bd=6)
         frame.grid(row=3, column=1, rowspan=2, padx=10, pady=10, sticky='n')
-        slider_length = 380 # match to camera
+        slider_length = 365 # match to camera
         button_width, button_height = 10, 2
         # scan slider:
         self.scan_range_um_min, self.scan_range_um_max = 1, 100
@@ -171,7 +180,8 @@ class GuiGalvo:
             min_value=self.scan_range_um_min,
             max_value=self.scan_range_um_max,
             default_value=self.scan_range_um_center,
-            row=0)
+            row=0,
+            width=5)
         # scan min button:
         button_scan_range_um_min = tk.Button(
             frame,
@@ -212,7 +222,8 @@ class GuiGalvo:
             min_value=self.voxel_aspect_ratio_min,
             max_value=self.voxel_aspect_ratio_max,
             default_value=self.voxel_aspect_ratio_max,
-            row=2)
+            row=2,
+            width=5)
         # voxel min button:
         button_voxel_aspect_ratio_min = tk.Button(
             frame,
@@ -292,7 +303,8 @@ class GuiFocusPiezo:
             tickinterval=10,
             min_value=self.min,
             max_value=self.max,
-            rowspan=5)
+            rowspan=5,
+            width=5)
         button_width, button_height = 10, 2
         # up buttons:
         self.button_large_move_up = tk.Button(
@@ -338,7 +350,7 @@ class GuiFocusPiezo:
         if self.min <= up_value <= self.max:
             self.update_position(up_value)
         return None
-    
+
     def small_move_up(self):
         up_value = self.position_um.valid_spinbox_value - self.small_move
         if self.min <= up_value <= self.max:
@@ -369,7 +381,8 @@ class GuiFocusPiezo:
 class GuiXYStage:
     def __init__(self, master):
         frame = tk.LabelFrame(master, text='XY STAGE', bd=6)
-        frame.grid(row=3, column=2, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=3, column=2, rowspan=2, columnspan=2,
+                   padx=10, pady=10, sticky='n')
         # last move textbox:
         self.last_move = tkcw.Textbox(
             frame,
@@ -436,7 +449,8 @@ class GuiXYStage:
             max_value=100,
             default_value=100,
             row=4,
-            columnspan=3)
+            columnspan=3,
+            width=5)
 
     def update_last_move(self, text):
         self.last_move.textbox.delete('1.0', '10.0')
