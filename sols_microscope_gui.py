@@ -255,7 +255,7 @@ class GuiGalvo:
 
     def update_scan_range_um(self, scan_range_um):
         self.scan_range_um.spinbox_value.set(scan_range_um)
-        self.scan_range_um.slider_value.set(scan_range_um)
+        self.scan_range_um.update_spinbox_and_validate(None)
         return None
 
     def set_voxel_aspect_ratio_min(self):
@@ -272,7 +272,7 @@ class GuiGalvo:
 
     def update_voxel_aspect_ratio(self, voxel_aspect_ratio):
         self.voxel_aspect_ratio.spinbox_value.set(voxel_aspect_ratio)
-        self.voxel_aspect_ratio.slider_value.set(voxel_aspect_ratio)
+        self.voxel_aspect_ratio.update_spinbox_and_validate(None)
         return None
 
 class GuiFocusPiezo:
@@ -363,7 +363,7 @@ class GuiFocusPiezo:
 
     def update_position(self, position_um):
         self.position_um.spinbox_value.set(position_um)
-        self.position_um.slider_value.set(position_um)
+        self.position_um.update_spinbox_and_validate(None)
         return None
 
 class GuiXYStage:
@@ -1042,6 +1042,7 @@ class GuiMicroscope:
         self.volumes_spinbox.spinbox_value.set(volumes_per_buffer)
         if delay_s is not None:
             self.delay_spinbox.spinbox_value.set(delay_s)
+            self.delay_spinbox.update_spinbox_and_validate(None)
         # apply the file settings:
         self.apply_settings(check_XY_stage=False)
         return None
@@ -1068,7 +1069,9 @@ class GuiMicroscope:
         # reset gui to position zero:
         total_positions = len(focus_piezo_position_list)
         self.total_positions_spinbox.spinbox_value.set(total_positions)
+        self.total_positions_spinbox.update_spinbox_and_validate(None)
         self.current_position_spinbox.spinbox_value.set(0)
+        self.current_position_spinbox.update_spinbox_and_validate(None)
         if total_positions != 0:
             self.gui_focus_piezo.update_position(focus_piezo_position_list[0])
             self.gui_xy_stage.update_position(XY_stage_position_list[0])
@@ -1160,7 +1163,9 @@ class GuiMicroscope:
             # update gui:
             positions = len(self.focus_piezo_position_list)
             self.total_positions_spinbox.spinbox_value.set(positions)
+            self.total_positions_spinbox.update_spinbox_and_validate(None)
             self.current_position_spinbox.spinbox_value.set(positions)
+            self.current_position_spinbox.update_spinbox_and_validate(None)
             # write to file:
             with open(self.session_folder +
                       "focus_piezo_position_list.txt", "a") as file:
@@ -1318,6 +1323,7 @@ class GuiMicroscope:
             self.gui_focus_piezo.update_position(focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.current_position_spinbox.spinbox_value.set(new_position)
+            self.current_position_spinbox.update_spinbox_and_validate(None)
         # run minimal code for speed:
         self.position_button_pressed = False
         if self.move_to_start_position:
