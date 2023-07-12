@@ -487,7 +487,7 @@ class GuiMicroscope:
         self.init_gui_settings()        # collects settings from GUI
         self.init_gui_settings_output() # shows output from settings
         self.init_gui_position_list()   # navigates position lists
-        self.init_gui_acquisition()     # microscope methods
+        self.init_gui_acquire()         # microscope methods
         self.init_quit_button()
         # grey out XYZ navigation buttons if not in scout mode:
         self.enable_XYZ_navigation_buttons(False)
@@ -567,7 +567,7 @@ class GuiMicroscope:
         self.label_textbox = tkcw.Textbox(
             self.settings_frame,
             label='Folder label',
-            default_text='sols_gui',
+            default_text='sols',
             row=1,
             width=spinbox_width,
             height=1)
@@ -582,7 +582,7 @@ class GuiMicroscope:
         # volumes spinbox:
         self.volumes_spinbox = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
-            label='Volumes per acquisition',
+            label='Volumes per acquire',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=1,
@@ -590,10 +590,10 @@ class GuiMicroscope:
             default_value=1,
             row=3,
             width=spinbox_width)
-        # acquisitions spinbox:
-        self.acquisitions_spinbox = tkcw.CheckboxSliderSpinbox(
+        # acquire number spinbox:
+        self.acquire_number_spinbox = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
-            label='Acquisition number',
+            label='Acquire number',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=1,
@@ -604,7 +604,7 @@ class GuiMicroscope:
         # delay spinbox:
         self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
-            label='Inter-acquisition delay (s)',
+            label='Inter-acquire delay (s)',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=0,
@@ -660,7 +660,7 @@ class GuiMicroscope:
         # total time textbox:
         self.total_time_textbox = tkcw.Textbox(
             self.output_frame,
-            label='Total acquisition time (s)',
+            label='Total acquire time (s)',
             default_text='None',
             row=4,
             width=spinbox_width,
@@ -1013,18 +1013,18 @@ class GuiMicroscope:
     def move_to_end_position(self):
         self.move_to_end_position = True
 
-    def init_gui_acquisition(self):
-        self.aquisition_frame = tk.LabelFrame(
-            self.root, text='ACQUISITION', bd=6)
-        self.aquisition_frame.grid(
+    def init_gui_acquire(self):
+        self.acquire_frame = tk.LabelFrame(
+            self.root, text='ACQUIRE', bd=6)
+        self.acquire_frame.grid(
             row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.aquisition_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.acquire_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
         # live mode button:
         self.live_mode_enabled = tk.BooleanVar()
         live_mode_button = tk.Checkbutton(
-            self.aquisition_frame,
+            self.acquire_frame,
             text='Live mode (On/Off)',
             variable=self.live_mode_enabled,
             command=self.init_live_mode,
@@ -1035,7 +1035,7 @@ class GuiMicroscope:
         # scout mode button:
         self.scout_mode_enabled = tk.BooleanVar()
         scout_mode_button = tk.Checkbutton(
-            self.aquisition_frame,
+            self.acquire_frame,
             text='Scout mode (On/Off)',
             variable=self.scout_mode_enabled,
             command=self.init_scout_mode,
@@ -1045,7 +1045,7 @@ class GuiMicroscope:
         scout_mode_button.grid(row=1, column=0, padx=10, pady=10)
         # snap volume button:
         snap_volume_button = tk.Button(
-            self.aquisition_frame,
+            self.acquire_frame,
             text="Snap volume",
             command=self.snap_volume,
             width=button_width,
@@ -1053,35 +1053,35 @@ class GuiMicroscope:
         snap_volume_button.grid(row=2, column=0, padx=10, pady=10)
         # snap and save button:
         snap_volume_and_save_button = tk.Button(
-            self.aquisition_frame,
+            self.acquire_frame,
             text="Snap volume and save",
             command=self.snap_volume_and_save,
             width=button_width,
             height=button_height)
         snap_volume_and_save_button.grid(row=3, column=0, padx=10, pady=10)
-        # run aquisition button:
-        self.running_aquisition = tk.BooleanVar()
-        run_aquisition_button = tk.Button(
-            self.aquisition_frame,
-            text="Run aquisition",
-            command=self.init_acquisition,
+        # run acquire button:
+        self.running_acquire = tk.BooleanVar()
+        run_acquire_button = tk.Button(
+            self.acquire_frame,
+            text="Run acquire",
+            command=self.init_acquire,
             width=button_width,
             height=button_height)
-        run_aquisition_button.grid(row=4, column=0, padx=10, pady=10)
-        run_aquisition_button.bind('<Enter>', self.get_tkfocus)
-        # cancel aquisition button:
-        self.cancel_aquisition = tk.BooleanVar()
-        cancel_aquisition_button = tk.Button(
-            self.aquisition_frame,
-            text="Cancel aquisition",
-            command=self.cancel_acquisition,
+        run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
+        run_acquire_button.bind('<Enter>', self.get_tkfocus)
+        # cancel acquire button:
+        self.canceled_acquire = tk.BooleanVar()
+        cancel_acquire_button = tk.Button(
+            self.acquire_frame,
+            text="Cancel acquire",
+            command=self.cancel_acquire,
             width=button_width,
             height=button_height)
-        cancel_aquisition_button.grid(row=5, column=0, padx=10, pady=10)
+        cancel_acquire_button.grid(row=5, column=0, padx=10, pady=10)
         return None
 
     def get_tkfocus(self, event):   # event is not used here (.bind)
-        self.aquisition_frame.focus_set() # take from widgets to force update
+        self.acquire_frame.focus_set() # take from widgets to force update
         return None
 
     def get_gui_settings(self):
@@ -1337,7 +1337,7 @@ class GuiMicroscope:
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
         total_storage_gb = (data_gb + preview_gb) * (
-            self.acquisitions_spinbox.value)
+            self.acquire_number_spinbox.value)
         text = '%0.3f'%total_storage_gb
         self.total_storage_textbox.textbox.delete('1.0', '10.0')
         self.total_storage_textbox.textbox.insert('1.0', text)        
@@ -1345,7 +1345,7 @@ class GuiMicroscope:
         acquire_time_s = (self.scope.buffer_time_s +
                           self.delay_spinbox.value)
         total_time_s = (
-            acquire_time_s * self.acquisitions_spinbox.value)
+            acquire_time_s * self.acquire_number_spinbox.value)
         text = '%0.6f (%0.0f min)'%(total_time_s, (total_time_s / 60))
         self.total_time_textbox.textbox.delete('1.0', '10.0')
         self.total_time_textbox.textbox.insert('1.0', text)
@@ -1364,7 +1364,7 @@ class GuiMicroscope:
         return None
 
     def loop_snoutfocus(self):
-        if not self.running_aquisition.get(): self.scope.snoutfocus()
+        if not self.running_acquire.get(): self.scope.snoutfocus()
         wait_ms = int(round(5 * 60 * 1e3))
         self.root.after(wait_ms, self.loop_snoutfocus)
         return None
@@ -1607,46 +1607,46 @@ class GuiMicroscope:
             self.enable_XYZ_navigation_buttons(False)
         return None
 
-    def init_acquisition(self):
-        print('\nAcquisition -> started')
+    def init_acquire(self):
+        print('\nAcquire -> started')
         self.auto_update_settings_enabled.set(0)
         self.live_mode_enabled.set(0)
         self.scout_mode_enabled.set(0)
-        self.cancel_aquisition.set(0)
-        self.running_aquisition.set(1)
+        self.canceled_acquire.set(0)
+        self.running_acquire.set(1)
         self.apply_settings()
         self.update_gui_settings_output()
-        self.folder_name = self.get_folder_name()
+        self.folder_name = self.get_folder_name() + '_acquire'
         self.description = self.description_textbox.text
         self.delay_s = self.delay_spinbox.value
-        self.acquisitions = self.acquisitions_spinbox.value
-        self.acquisition_count = 0
-        self.run_acquisition()
+        self.acquire_number = self.acquire_number_spinbox.value
+        self.acquire_count = 0
+        self.run_acquire()
         return None
 
-    def run_acquisition(self):
+    def run_acquire(self):
         delay_s = self.delay_s
-        if self.acquisition_count == 0: delay_s = 0 # avoid first delay_s
-        self.scope.acquire(filename='%06i.tif'%self.acquisition_count,
+        if self.acquire_count == 0: delay_s = 0 # avoid first delay_s
+        self.scope.acquire(filename='%06i.tif'%self.acquire_count,
                            folder_name=self.folder_name,
                            description=self.description,
                            delay_s=delay_s)
         self.update_position_list()
-        self.acquisition_count += 1
-        if (self.acquisition_count < self.acquisitions
-            and not self.cancel_aquisition.get()): # acquire again
+        self.acquire_count += 1
+        if (self.acquire_count < self.acquire_number
+            and not self.canceled_acquire.get()): # acquire again
                 wait_ms = int(round(
                     0.99 * 1e3 * (self.scope.buffer_time_s + delay_s)))
-                self.root.after(wait_ms, self.run_acquisition) 
+                self.root.after(wait_ms, self.run_acquire) 
         else: # finish up
             self.scope.finish_all_tasks()
-            self.running_aquisition.set(0)
-            print('Acquisition -> finished\n')
+            self.running_acquire.set(0)
+            print('Acquire -> finished\n')
         return None
 
-    def cancel_acquisition(self):
-        self.cancel_aquisition.set(1)
-        print('\n ***Acquisition -> canceled*** \n')
+    def cancel_acquire(self):
+        self.canceled_acquire.set(1)
+        print('\n ***Acquire -> canceled*** \n')
         return None
 
     def close(self):
