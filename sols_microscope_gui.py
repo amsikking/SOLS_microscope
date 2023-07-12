@@ -253,37 +253,28 @@ class GuiGalvo:
             row=3, column=0, padx=10, pady=10, sticky='e')
 
     def set_scan_range_um_min(self):
-        self.update_scan_range_um(self.scan_range_um_min)
+        self.scan_range_um.update_and_validate(self.scan_range_um_min)
         return None
 
     def set_scan_range_um_center(self):
-        self.update_scan_range_um(self.scan_range_um_center)
+        self.scan_range_um.update_and_validate(self.scan_range_um_center)
         return None
 
     def set_scan_range_um_max(self):
-        self.update_scan_range_um(self.scan_range_um_max)
-        return None
-
-    def update_scan_range_um(self, scan_range_um):
-        self.scan_range_um.spinbox_value.set(scan_range_um)
-        self.scan_range_um.update_spinbox_and_validate(None)
+        self.scan_range_um.update_and_validate(self.scan_range_um_max)
         return None
 
     def set_voxel_aspect_ratio_min(self):
-        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_min)
+        self.voxel_aspect_ratio.update_and_validate(self.voxel_aspect_ratio_min)
         return None
 
     def set_voxel_aspect_ratio_center(self):
-        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_center)
+        self.voxel_aspect_ratio.update_and_validate(
+            self.voxel_aspect_ratio_center)
         return None
 
     def set_voxel_aspect_ratio_max(self):
-        self.update_voxel_aspect_ratio(self.voxel_aspect_ratio_max)
-        return None
-
-    def update_voxel_aspect_ratio(self, voxel_aspect_ratio):
-        self.voxel_aspect_ratio.spinbox_value.set(voxel_aspect_ratio)
-        self.voxel_aspect_ratio.update_spinbox_and_validate(None)
+        self.voxel_aspect_ratio.update_and_validate(self.voxel_aspect_ratio_max)
         return None
 
 class GuiFocusPiezo:
@@ -294,7 +285,7 @@ class GuiFocusPiezo:
         self.center = int(round((self.max - self.min) / 2))
         self.large_move, self.small_move = 5, 1
         # slider:
-        self.position_um = tkcw.CheckboxSliderSpinbox(
+        self.position_spinbox = tkcw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
             orient='vertical',
@@ -346,36 +337,27 @@ class GuiFocusPiezo:
         self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
 
     def large_move_up(self):
-        up_value = self.position_um.valid_spinbox_value - self.large_move
-        if self.min <= up_value <= self.max:
-            self.update_position(up_value)
+        self.position_spinbox.update_and_validate(
+            self.position_spinbox.value - self.large_move)
         return None
 
     def small_move_up(self):
-        up_value = self.position_um.valid_spinbox_value - self.small_move
-        if self.min <= up_value <= self.max:
-            self.update_position(up_value)
+        self.position_spinbox.update_and_validate(
+            self.position_spinbox.value - self.small_move)
         return None
 
     def move_center(self):
-        self.update_position(self.center)
+        self.position_spinbox.update_and_validate(self.center)
         return None
 
     def small_move_down(self):
-        down_value = self.position_um.valid_spinbox_value + self.small_move
-        if self.min <= down_value <= self.max:
-            self.update_position(down_value)
+        self.position_spinbox.update_and_validate(
+            self.position_spinbox.value + self.small_move)
         return None
 
     def large_move_down(self):
-        down_value = self.position_um.valid_spinbox_value + self.large_move
-        if self.min <= down_value <= self.max:
-            self.update_position(down_value)
-        return None
-
-    def update_position(self, position_um):
-        self.position_um.spinbox_value.set(position_um)
-        self.position_um.update_spinbox_and_validate(None)
+        self.position_spinbox.update_and_validate(
+            self.position_spinbox.value + self.large_move)
         return None
 
 class GuiXYStage:
@@ -519,7 +501,8 @@ class GuiMicroscope:
             focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
             XY_stage_position_mm = [self.scope.XY_stage.x,
                                     self.scope.XY_stage.y]
-            self.gui_focus_piezo.update_position(focus_piezo_z_um)
+            self.gui_focus_piezo.position_spinbox.update_and_validate(
+                focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.XY_joystick_active = False
             self.XY_stage_last_move = 'None'
@@ -828,9 +811,9 @@ class GuiMicroscope:
     def generate_grid(self, clear_buttons=True):
         if clear_buttons:
             self.generate_grid_buttons_frame.destroy()
-        self.grid_rows = self.grid_rows_spinbox.valid_spinbox_value
-        self.grid_cols = self.grid_cols_spinbox.valid_spinbox_value
-        self.grid_spacing_um = self.grid_spacing_spinbox.valid_spinbox_value
+        self.grid_rows = self.grid_rows_spinbox.value
+        self.grid_cols = self.grid_cols_spinbox.value
+        self.grid_spacing_um = self.grid_spacing_spinbox.value
         self.generate_grid_buttons(self.generate_grid_popup, enabled=False)
         self.set_current_location_button.config(state='normal')
         self.move_to_selection_button.config(state='disabled')
@@ -1106,40 +1089,33 @@ class GuiMicroscope:
         channels_per_slice, power_per_channel = [], []
         if self.gui_transmitted_light.power.checkbox_value.get():
             channels_per_slice.append('LED')
-            power_per_channel.append(
-                self.gui_transmitted_light.power.valid_spinbox_value)
+            power_per_channel.append(self.gui_transmitted_light.power.value)
         if self.gui_laser_box.power405.checkbox_value.get():
             channels_per_slice.append('405')
-            power_per_channel.append(
-                self.gui_laser_box.power405.valid_spinbox_value)
+            power_per_channel.append(self.gui_laser_box.power405.value)
         if self.gui_laser_box.power488.checkbox_value.get():
             channels_per_slice.append('488')
-            power_per_channel.append(
-                self.gui_laser_box.power488.valid_spinbox_value)
+            power_per_channel.append(self.gui_laser_box.power488.value)
         if self.gui_laser_box.power561.checkbox_value.get():
             channels_per_slice.append('561')
-            power_per_channel.append(
-                self.gui_laser_box.power561.valid_spinbox_value)
+            power_per_channel.append(self.gui_laser_box.power561.value)
         if self.gui_laser_box.power640.checkbox_value.get():
             channels_per_slice.append('640')
-            power_per_channel.append(
-                self.gui_laser_box.power640.valid_spinbox_value)
+            power_per_channel.append(self.gui_laser_box.power640.value)
         if len(channels_per_slice) == 0: # default TL if nothing selected
             self.gui_transmitted_light.power.checkbox_value.set(1)
             channels_per_slice = ('LED',)
-            power_per_channel = (
-                self.gui_transmitted_light.power.valid_spinbox_value,)
+            power_per_channel = (self.gui_transmitted_light.power.value,)
         emission_filter = self.gui_filter_wheel.current_emission_filter.get()
         illumination_time_us = (
-            1000 * self.gui_camera.illumination_time_ms.valid_spinbox_value
-            + self.gui_camera.illumination_time_us.valid_spinbox_value)
-        height_px = self.gui_camera.height_px.valid_spinbox_value
-        width_px  = self.gui_camera.width_px.valid_spinbox_value
-        voxel_aspect_ratio = (
-            self.gui_galvo.voxel_aspect_ratio.valid_spinbox_value)
-        scan_range_um = self.gui_galvo.scan_range_um.valid_spinbox_value
-        volumes_per_buffer = self.volumes_spinbox.valid_spinbox_value
-        focus_piezo_z_um = self.gui_focus_piezo.position_um.valid_spinbox_value
+            1000 * self.gui_camera.illumination_time_ms.value
+            + self.gui_camera.illumination_time_us.value)
+        height_px = self.gui_camera.height_px.value
+        width_px  = self.gui_camera.width_px.value
+        voxel_aspect_ratio = self.gui_galvo.voxel_aspect_ratio.value
+        scan_range_um = self.gui_galvo.scan_range_um.value
+        volumes_per_buffer = self.volumes_spinbox.value
+        focus_piezo_z_um = self.gui_focus_piezo.position_spinbox.value
         XY_stage_position_mm = self.gui_xy_stage.position_mm
         # settings:
         gui_settings = {'channels_per_slice'    :channels_per_slice,
@@ -1274,50 +1250,37 @@ class GuiMicroscope:
         for i, channel in enumerate(channels_per_slice):
             if channel == 'LED':
                 self.gui_transmitted_light.power.checkbox_value.set(1)
-                self.gui_transmitted_light.power.spinbox_value.set(
+                self.gui_transmitted_light.power.update_and_validate(
                     power_per_channel[i])
-                self.gui_transmitted_light.power.update_spinbox_and_validate(
-                    None)
             if channel == '405':
                 self.gui_laser_box.power405.checkbox_value.set(1)
-                self.gui_laser_box.power405.spinbox_value.set(
+                self.gui_laser_box.power405.update_and_validate(
                     power_per_channel[i])
-                self.gui_laser_box.power405.update_spinbox_and_validate(None)
             if channel == '488':
                 self.gui_laser_box.power488.checkbox_value.set(1)
-                self.gui_laser_box.power488.spinbox_value.set(
+                self.gui_laser_box.power488.update_and_validate(
                     power_per_channel[i])
-                self.gui_laser_box.power488.update_spinbox_and_validate(None)
             if channel == '561':
                 self.gui_laser_box.power561.checkbox_value.set(1)
-                self.gui_laser_box.power561.spinbox_value.set(
+                self.gui_laser_box.power561.update_and_validate(
                     power_per_channel[i])
-                self.gui_laser_box.power561.update_spinbox_and_validate(None)
             if channel == '640':
                 self.gui_laser_box.power640.checkbox_value.set(1)
-                self.gui_laser_box.power640.spinbox_value.set(
+                self.gui_laser_box.power640.update_and_validate(
                     power_per_channel[i])
-                self.gui_laser_box.power640.update_spinbox_and_validate(None)
         self.gui_filter_wheel.current_emission_filter.set(emission_filter)
-        self.gui_camera.illumination_time_us.spinbox_value.set(
+        self.gui_camera.illumination_time_us.update_and_validate(
             illumination_time_us)
-        self.gui_camera.illumination_time_us.update_spinbox_and_validate(None)
-        self.gui_camera.illumination_time_ms.spinbox_value.set(
+        self.gui_camera.illumination_time_ms.update_and_validate(
             illumination_time_ms)
-        self.gui_camera.illumination_time_ms.update_spinbox_and_validate(None)
-        self.gui_camera.height_px.spinbox_value.set(height_px)
-        self.gui_camera.height_px.update_spinbox_and_validate(None)
-        self.gui_camera.width_px.spinbox_value.set(width_px)
-        self.gui_camera.width_px.update_spinbox_and_validate(None)
-        self.gui_galvo.voxel_aspect_ratio.spinbox_value.set(
+        self.gui_camera.height_px.update_and_validate(height_px)
+        self.gui_camera.width_px.update_and_validate(width_px)
+        self.gui_galvo.voxel_aspect_ratio.update_and_validate(
             voxel_aspect_ratio)
-        self.gui_galvo.voxel_aspect_ratio.update_spinbox_and_validate(None)
-        self.gui_galvo.scan_range_um.spinbox_value.set(scan_range_um)
-        self.gui_galvo.scan_range_um.update_spinbox_and_validate(None)
-        self.volumes_spinbox.spinbox_value.set(volumes_per_buffer)
+        self.gui_galvo.scan_range_um.update_and_validate(scan_range_um)
+        self.volumes_spinbox.update_and_validate(volumes_per_buffer)
         if delay_s is not None:
-            self.delay_spinbox.spinbox_value.set(delay_s)
-            self.delay_spinbox.update_spinbox_and_validate(None)
+            self.delay_spinbox.update_and_validate(delay_s)
         # apply the file settings:
         self.apply_settings(check_XY_stage=False)
         return None
@@ -1343,13 +1306,13 @@ class GuiMicroscope:
                 float(position.strip('[').split(',')[1].strip(']').lstrip())]
         # reset gui to position zero:
         total_positions = len(focus_piezo_position_list)
-        self.total_positions_spinbox.spinbox_value.set(total_positions)
-        self.total_positions_spinbox.update_spinbox_and_validate(None)
-        self.current_position_spinbox.spinbox_value.set(0)
-        self.current_position_spinbox.update_spinbox_and_validate(None)
+        self.total_positions_spinbox.update_and_validate(total_positions)
+        self.current_position_spinbox.update_and_validate(0)
         if total_positions != 0:
-            self.gui_focus_piezo.update_position(focus_piezo_position_list[0])
+            self.gui_focus_piezo.position_spinbox.update_and_validate(
+                focus_piezo_position_list[0])
             self.gui_xy_stage.update_position(XY_stage_position_list[0])
+            self.current_position_spinbox.update_and_validate(1)
         # update attributes:
         self.focus_piezo_position_list = focus_piezo_position_list
         self.XY_stage_position_list = XY_stage_position_list
@@ -1374,15 +1337,15 @@ class GuiMicroscope:
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
         total_storage_gb = (data_gb + preview_gb) * (
-            self.acquisitions_spinbox.valid_spinbox_value)
+            self.acquisitions_spinbox.value)
         text = '%0.3f'%total_storage_gb
         self.total_storage_textbox.textbox.delete('1.0', '10.0')
         self.total_storage_textbox.textbox.insert('1.0', text)        
         # calculate time:
         acquire_time_s = (self.scope.buffer_time_s +
-                          self.delay_spinbox.valid_spinbox_value)
+                          self.delay_spinbox.value)
         total_time_s = (
-            acquire_time_s * self.acquisitions_spinbox.valid_spinbox_value)
+            acquire_time_s * self.acquisitions_spinbox.value)
         text = '%0.6f (%0.0f min)'%(total_time_s, (total_time_s / 60))
         self.total_time_textbox.textbox.delete('1.0', '10.0')
         self.total_time_textbox.textbox.insert('1.0', text)
@@ -1437,10 +1400,8 @@ class GuiMicroscope:
                 self.applied_settings['XY_stage_position_mm'])
             # update gui:
             positions = len(self.focus_piezo_position_list)
-            self.total_positions_spinbox.spinbox_value.set(positions)
-            self.total_positions_spinbox.update_spinbox_and_validate(None)
-            self.current_position_spinbox.spinbox_value.set(positions)
-            self.current_position_spinbox.update_spinbox_and_validate(None)
+            self.total_positions_spinbox.update_and_validate(positions)
+            self.current_position_spinbox.update_and_validate(positions)
             # write to file:
             with open(self.session_folder +
                       "focus_piezo_position_list.txt", "a") as file:
@@ -1483,7 +1444,7 @@ class GuiMicroscope:
         state = 'normal'
         if not enable: state = 'disabled'
         # focus:
-        for child in self.gui_focus_piezo.position_um.winfo_children():
+        for child in self.gui_focus_piezo.position_spinbox.winfo_children():
             child.configure(state=state)
         self.gui_focus_piezo.button_large_move_up.config(state=state)
         self.gui_focus_piezo.button_small_move_up.config(state=state)
@@ -1525,7 +1486,7 @@ class GuiMicroscope:
             # current position:
             XY_stage_position_mm = self.gui_xy_stage.position_mm
             # calculate move size:
-            move_pct = self.gui_xy_stage.move_pct.valid_spinbox_value / 100
+            move_pct = self.gui_xy_stage.move_pct.value / 100
             scan_width_um = (
             self.applied_settings['width_px'] * sols.sample_px_um)
             ud_move_mm = (
@@ -1568,14 +1529,16 @@ class GuiMicroscope:
             self.move_forward_one_position  = False
             self.move_to_end_position       = False            
             # check total and current position:
-            total_positions  = self.total_positions_spinbox.valid_spinbox_value
-            current_position = self.current_position_spinbox.valid_spinbox_value
+            total_positions  = self.total_positions_spinbox.value
+            current_position = self.current_position_spinbox.value
             if total_positions == 0:
                 return None
             self.position_button_pressed = True
             # check which direction:
             if go_to == 'start':
                 new_position = 1
+                if new_position == current_position:
+                    self.position_button_pressed = False
             if go_to == 'back':
                 if current_position > 1:
                     new_position = current_position - 1
@@ -1590,15 +1553,17 @@ class GuiMicroscope:
                     self.position_button_pressed = False
             if go_to == 'end':
                 new_position = total_positions
+                if new_position == current_position:
+                    self.position_button_pressed = False
             index = new_position - 1
             # get positions:
             focus_piezo_z_um = self.focus_piezo_position_list[index]
             XY_stage_position_mm = self.XY_stage_position_list[index]
             # update gui:
-            self.gui_focus_piezo.update_position(focus_piezo_z_um)
+            self.gui_focus_piezo.position_spinbox.update_and_validate(
+                focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
-            self.current_position_spinbox.spinbox_value.set(new_position)
-            self.current_position_spinbox.update_spinbox_and_validate(None)
+            self.current_position_spinbox.update_and_validate(new_position)
         # run minimal code for speed:
         self.position_button_pressed = False
         if self.move_to_start_position:
@@ -1618,8 +1583,7 @@ class GuiMicroscope:
                 self.last_acquire_task.join() # don't accumulate acquires
                 self.last_acquire_task = self.scope.acquire()
             # Check Z:
-            focus_piezo_z_um = (
-                self.gui_focus_piezo.position_um.valid_spinbox_value)
+            focus_piezo_z_um = self.gui_focus_piezo.position_spinbox.value
             if self.applied_settings['focus_piezo_z_um'] != focus_piezo_z_um:
                 snap()
             # Check XY buttons:
@@ -1654,8 +1618,8 @@ class GuiMicroscope:
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name()
         self.description = self.description_textbox.text
-        self.delay_s = self.delay_spinbox.valid_spinbox_value
-        self.acquisitions = self.acquisitions_spinbox.valid_spinbox_value
+        self.delay_s = self.delay_spinbox.value
+        self.acquisitions = self.acquisitions_spinbox.value
         self.acquisition_count = 0
         self.run_acquisition()
         return None
