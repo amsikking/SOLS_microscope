@@ -9,6 +9,7 @@ import queue
 import numpy as np
 from scipy.ndimage import zoom, rotate, gaussian_filter1d
 from tifffile import imread, imwrite
+import napari
 
 # Our code, one .py file per module, copy files to your local directory:
 try:
@@ -169,7 +170,7 @@ class Microscope:
 
     def _init_display(self):
         if self.verbose: print("\n%s: opening display..."%self.name)  
-        self.display = display()
+        self.display = display(display_type=_CustomNapariDisplay)
         if self.verbose: print("\n%s: -> display open."%self.name) 
 
     def _check_memory(self):        
@@ -706,6 +707,25 @@ class Microscope:
         self.XY_stage.close()
         self.display.close()
         if self.verbose: print("%s: done closing."%self.name)
+
+class _CustomNapariDisplay:
+    def __init__(self):
+        self.viewer = napari.Viewer()
+
+    def show_image(self, last_preview):
+        if not hasattr(self, 'last_image'):
+            self.last_image = self.viewer.add_image(last_preview)
+        else:
+            self.last_image.data = last_preview
+
+    def show_tile_preview(self, tile_preview):
+        if not hasattr(self, 'tile_image'):
+            self.tile_image = self.viewer.add_image(tile_preview)
+        else:
+            self.tile_image.data = tile_preview
+
+    def close(self):
+        self.viewer.close()
 
 # SOLS definitions and API:
 
