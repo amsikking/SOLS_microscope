@@ -1390,38 +1390,33 @@ class GuiMicroscope:
         return folder_name
 
     def update_position_list(self):
-        num_folders   = len(next(os.walk(self.session_folder))[1])
-        num_positions = len(self.focus_piezo_position_list)
-        if num_folders == (num_positions + 1): # folder has landed on disk
-            # update list:
-            self.focus_piezo_position_list.append(
-                self.applied_settings['focus_piezo_z_um'])
-            self.XY_stage_position_list.append(
-                self.applied_settings['XY_stage_position_mm'])
-            # update gui:
-            positions = len(self.focus_piezo_position_list)
-            self.total_positions_spinbox.update_and_validate(positions)
-            self.current_position_spinbox.update_and_validate(positions)
-            # write to file:
-            with open(self.session_folder +
-                      "focus_piezo_position_list.txt", "a") as file:
-                file.write(str(self.focus_piezo_position_list[-1]) + ',\n')
-            with open(self.session_folder +
-                      "XY_stage_position_list.txt", "a") as file:
-                file.write(str(self.XY_stage_position_list[-1]) + ',\n')
-        else: # wait for folder
-            self.root.after(self.gui_delay_ms, self.update_position_list)
+        # update list:
+        self.focus_piezo_position_list.append(
+            self.applied_settings['focus_piezo_z_um'])
+        self.XY_stage_position_list.append(
+            self.applied_settings['XY_stage_position_mm'])
+        # update gui:
+        positions = len(self.focus_piezo_position_list)
+        self.total_positions_spinbox.update_and_validate(positions)
+        self.current_position_spinbox.update_and_validate(positions)
+        # write to file:
+        with open(self.session_folder +
+                  "focus_piezo_position_list.txt", "a") as file:
+            file.write(str(self.focus_piezo_position_list[-1]) + ',\n')
+        with open(self.session_folder +
+                  "XY_stage_position_list.txt", "a") as file:
+            file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
 
     def snap_volume_and_save(self):
         self.apply_settings(single_volume=True)
+        self.update_position_list()
         self.update_gui_settings_output()
         folder_name = self.get_folder_name() + '_snap'
         self.last_acquire_task.join() # don't accumulate acquires
         self.scope.acquire(filename='snap.tif',
                            folder_name=folder_name,
                            description=self.description_textbox.text)
-        self.update_position_list()
         return None
 
     def init_live_mode(self):
@@ -1615,6 +1610,7 @@ class GuiMicroscope:
         self.canceled_acquire.set(0)
         self.running_acquire.set(1)
         self.apply_settings()
+        self.update_position_list()
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_acquire'
         self.description = self.description_textbox.text
@@ -1631,7 +1627,6 @@ class GuiMicroscope:
                            folder_name=self.folder_name,
                            description=self.description,
                            delay_s=delay_s)
-        self.update_position_list()
         self.acquire_count += 1
         if (self.acquire_count < self.acquire_number
             and not self.canceled_acquire.get()): # acquire again
