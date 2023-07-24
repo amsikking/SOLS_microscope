@@ -1199,19 +1199,24 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         self.move_to_end_button.grid(row=6, column=0, padx=10, pady=10)
+        # set defaults:
+        self.move_to_start_position_now     = False
+        self.move_back_one_position_now     = False
+        self.move_forward_one_position_now  = False
+        self.move_to_end_position_now       = False 
         return None
 
     def move_to_start_position(self):
-        self.move_to_start_position = True
+        self.move_to_start_position_now = True
         
     def move_back_one_position(self):
-        self.move_back_one_position = True
+        self.move_back_one_position_now = True
         
     def move_forward_one_position(self):
-        self.move_forward_one_position = True
+        self.move_forward_one_position_now = True
 
     def move_to_end_position(self):
-        self.move_to_end_position = True
+        self.move_to_end_position_now = True
 
     def init_gui_acquire(self):
         self.acquire_frame = tk.LabelFrame(
@@ -1221,7 +1226,7 @@ class GuiMicroscope:
         self.acquire_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
         spinbox_width = 20
-        # live mode button:
+        # live mode:
         self.live_mode_enabled = tk.BooleanVar()
         live_mode_button = tk.Checkbutton(
             self.acquire_frame,
@@ -1232,7 +1237,7 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         live_mode_button.grid(row=0, column=0, padx=10, pady=10)
-        # scout mode button:
+        # scout mode:
         self.scout_mode_enabled = tk.BooleanVar()
         scout_mode_button = tk.Checkbutton(
             self.acquire_frame,
@@ -1243,7 +1248,7 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         scout_mode_button.grid(row=1, column=0, padx=10, pady=10)
-        # snap volume button:
+        # snap volume:
         snap_volume_button = tk.Button(
             self.acquire_frame,
             text="Snap volume",
@@ -1251,15 +1256,15 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         snap_volume_button.grid(row=2, column=0, padx=10, pady=10)
-        # snap and save button:
-        snap_volume_and_save_button = tk.Button(
+        # save volume and position:
+        save_volume_and_position_button = tk.Button(
             self.acquire_frame,
-            text="Snap volume and save",
-            command=self.snap_volume_and_save,
+            text="Save volume and position",
+            command=self.save_volume_and_position,
             width=button_width,
             height=button_height)
-        snap_volume_and_save_button.grid(row=3, column=0, padx=10, pady=10)
-        # run acquire button:
+        save_volume_and_position_button.grid(row=3, column=0, padx=10, pady=10)
+        # run acquire:
         self.running_acquire = tk.BooleanVar()
         run_acquire_button = tk.Button(
             self.acquire_frame,
@@ -1269,7 +1274,7 @@ class GuiMicroscope:
             height=button_height)
         run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
         run_acquire_button.bind('<Enter>', self.get_tkfocus)
-        # cancel acquire button:
+        # cancel acquire:
         self.canceled_acquire = tk.BooleanVar()
         cancel_acquire_button = tk.Button(
             self.acquire_frame,
@@ -1491,33 +1496,35 @@ class GuiMicroscope:
             parent=self.root,
             initialdir=os.getcwd(),
             title='Please choose a previous "gui session" folder')
-        # read files and parse positions into lists:
+        # read files, parse into lists and update attributes:
         focus_piezo_file_path = folder_path + '\\focus_piezo_position_list.txt'
         XY_stage_file_path = folder_path + '\\XY_stage_position_list.txt'
         with open(focus_piezo_file_path, 'r') as file:
             focus_piezo_position_list = file.read().splitlines()[1:] # skip 1st
         with open(XY_stage_file_path, 'r') as file:
             XY_stage_position_list = file.read().splitlines()[1:] # skip 1st
-        for i, position in enumerate(focus_piezo_position_list):
-            focus_piezo_position_list[i] = int(position.strip(','))
-        for i, position in enumerate(XY_stage_position_list):
-            XY_stage_position_list[i] = [
-                float(position.strip('[').strip(']').split(',')[0]),
-                float(position.strip('[').split(',')[1].strip(']').lstrip())]
-        # reset gui to position zero:
-        total_positions = len(focus_piezo_position_list)
+        for i, element in enumerate(focus_piezo_position_list):
+            focus_piezo_z_um = int(element.strip(','))
+            focus_piezo_position_list[i] = focus_piezo_z_um
+            self.focus_piezo_position_list.append(focus_piezo_z_um)
+        for i, element in enumerate(XY_stage_position_list):
+            XY_stage_position_mm = [
+                float(element.strip('[').strip(']').split(',')[0]),
+                float(element.strip('[').split(',')[1].strip(']').lstrip())]
+            XY_stage_position_list[i] = XY_stage_position_mm
+            self.XY_stage_position_list.append(XY_stage_position_mm)
+        # append positions to files:
+        with open(self.session_folder +
+                  "focus_piezo_position_list.txt", "a") as file:
+            for i in range(len(focus_piezo_position_list)):
+                file.write(str(focus_piezo_position_list[i]) + ',\n')
+        with open(self.session_folder +
+                  "XY_stage_position_list.txt", "a") as file:
+            for i in range(len(XY_stage_position_list)):
+                file.write(str(XY_stage_position_list[i]) + ',\n')
+        # update gui:
+        total_positions = len(self.focus_piezo_position_list)
         self.total_positions_spinbox.update_and_validate(total_positions)
-        self.current_position_spinbox.update_and_validate(0)
-        if total_positions != 0:
-            self.gui_focus_piezo.position_spinbox.update_and_validate(
-                focus_piezo_position_list[0])
-            self.gui_xy_stage.update_position(XY_stage_position_list[0])
-            self.current_position_spinbox.update_and_validate(1)
-        # update attributes:
-        self.focus_piezo_position_list = focus_piezo_position_list
-        self.XY_stage_position_list = XY_stage_position_list
-        # apply the file settings:
-        self.apply_settings()
         return None
 
     def update_gui_settings_output(self):
@@ -1608,7 +1615,7 @@ class GuiMicroscope:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
 
-    def snap_volume_and_save(self):
+    def save_volume_and_position(self):
         self.apply_settings(single_volume=True)
         self.update_position_list()
         self.update_gui_settings_output()
@@ -1719,10 +1726,10 @@ class GuiMicroscope:
     def check_position_buttons(self):
         def update_position(go_to): # only called if button pressed
             # toggle buttons back:
-            self.move_to_start_position     = False
-            self.move_back_one_position     = False
-            self.move_forward_one_position  = False
-            self.move_to_end_position       = False            
+            self.move_to_start_position_now     = False
+            self.move_back_one_position_now     = False
+            self.move_forward_one_position_now  = False
+            self.move_to_end_position_now       = False            
             # check total and current position:
             total_positions  = self.total_positions_spinbox.value
             current_position = self.current_position_spinbox.value
@@ -1761,13 +1768,13 @@ class GuiMicroscope:
             self.current_position_spinbox.update_and_validate(new_position)
         # run minimal code for speed:
         self.position_button_pressed = False
-        if self.move_to_start_position:
+        if self.move_to_start_position_now:
             update_position('start')
-        elif self.move_back_one_position:
+        elif self.move_back_one_position_now:
             update_position('back')
-        elif self.move_forward_one_position:
+        elif self.move_forward_one_position_now:
             update_position('forward')
-        elif self.move_to_end_position:
+        elif self.move_to_end_position_now:
             update_position('end')
         return None
 
