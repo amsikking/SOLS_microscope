@@ -717,7 +717,13 @@ class _CustomNapariDisplay:
             self.last_image = self.viewer.add_image(last_preview)
         else:
             self.last_image.data = last_preview
-
+            
+    def show_grid_preview(self, grid_preview):
+        if not hasattr(self, 'grid_image'):
+            self.grid_image = self.viewer.add_image(grid_preview)
+        else:
+            self.grid_image.data = grid_preview
+            
     def show_tile_preview(self, tile_preview):
         if not hasattr(self, 'tile_image'):
             self.tile_image = self.viewer.add_image(tile_preview)
