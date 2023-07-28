@@ -726,7 +726,14 @@ class GuiMicroscope:
             text='Save data and position',
             variable=self.save_grid_data_and_position)
         save_grid_data_and_position_button.grid(
-            row=5, column=0, padx=10, pady=10)
+            row=5, column=0, padx=10, pady=10, sticky='w')
+        # tile:
+        self.tile_grid = tk.BooleanVar()
+        tile_grid_button = tk.Checkbutton(
+            self.grid_frame,
+            text='Tile the grid',
+            variable=self.tile_grid)
+        tile_grid_button.grid(row=6, column=0, padx=10, pady=10, sticky='w')
         # start grid:
         self.start_grid_button = tk.Button(
             self.grid_frame,
@@ -734,7 +741,7 @@ class GuiMicroscope:
             command=self.init_grid,
             width=button_width,
             height=button_height)
-        self.start_grid_button.grid(row=6, column=0, padx=10, pady=10)
+        self.start_grid_button.grid(row=7, column=0, padx=10, pady=10)
         self.start_grid_button.config(state='disabled')
         # cancel grid:
         self.canceled_grid = tk.BooleanVar()
@@ -744,7 +751,7 @@ class GuiMicroscope:
             command=self.cancel_grid,
             width=button_width,
             height=button_height)
-        self.cancel_grid_button.grid(row=7, column=0, padx=10, pady=10)
+        self.cancel_grid_button.grid(row=8, column=0, padx=10, pady=10)
         return None
 
     def load_grid_from_file(self):
@@ -1002,24 +1009,47 @@ class GuiMicroscope:
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_grid'
+        if self.tile_grid.get():
+            self.folder_name = self.get_folder_name() + '_grid_tile'
+            # get tile parameters:
+            self.tile_rows = self.tile_width_spinbox.value
+            self.tile_cols = self.tile_rows
+            # calculate move size:
+            self.tile_X_mm = 1e-3 * self.applied_settings[
+                'width_px'] * sols.sample_px_um
+            self.tile_Y_mm = 1e-3 * self.applied_settings['scan_range_um']            
         # generate rows/cols list:
         self.XY_grid_rc_list = []
         for r in range(self.grid_rows):
             for c in range(self.grid_cols):
-                self.XY_grid_rc_list.append([r, c])
+                if self.tile_grid.get():
+                    for tile_r in range(self.tile_rows):
+                        for tile_c in range(self.tile_cols):
+                            self.XY_grid_rc_list.append([r, c, tile_r, tile_c])
+                else:
+                    self.XY_grid_rc_list.append([r, c])
         self.current_grid_image = 0
         self.run_grid()
         return None
 
     def run_grid(self):
-        r, c = self.XY_grid_rc_list[self.current_grid_image]
+        if self.tile_grid.get():
+            r, c, tile_r, tile_c = self.XY_grid_rc_list[self.current_grid_image]
+            filename = '%s%i_r%ic%i.tif'%(
+                chr(ord('@')+r + 1), c + 1, tile_r, tile_c)
+            XY_stage_position_mm = [
+                self.grid_positions_mm[r][c][0] - tile_c * self.tile_X_mm,
+                self.grid_positions_mm[r][c][1] + tile_r * self.tile_Y_mm]
+            self.gui_xy_stage.update_position(XY_stage_position_mm)
+        else:
+            r, c = self.XY_grid_rc_list[self.current_grid_image]
+            filename = '%s%i.tif'%(chr(ord('@')+r + 1), c + 1)
+            self.gui_xy_stage.update_position(self.grid_positions_mm[r][c])
         # update gui and move stage:
-        self.gui_xy_stage.update_position(self.grid_positions_mm[r][c])
         self.apply_settings(single_volume=True, check_XY_stage=False)
         self.grid_location_rc = [r, c]
         self.update_grid_location()
-        # get filename and check mode:
-        filename = '%s%i.tif'%(chr(ord('@')+r + 1), c + 1)
+        # check mode:
         preview_only = True
         if self.save_grid_data_and_position.get():
             preview_only = False
@@ -1034,13 +1064,27 @@ class GuiMicroscope:
         while not os.path.isfile(grid_preview_filename):
             self.root.after(self.gui_delay_ms)
         grid_image = imread(grid_preview_filename)
-        if (r, c) == (0, 0):
-            self.grid_preview = np.zeros(
-                (self.grid_rows * grid_image.shape[0],
-                 self.grid_cols * grid_image.shape[1]), 'uint16')
-        self.grid_preview[
-            r * grid_image.shape[0]:(r + 1) * grid_image.shape[0],
-            c * grid_image.shape[1]:(c + 1) * grid_image.shape[1]] = grid_image
+        if self.tile_grid.get():
+            if (r, c, tile_r, tile_c) == (0, 0, 0, 0):
+                self.grid_preview = np.zeros(
+                    (self.grid_rows * grid_image.shape[0] * self.tile_rows,
+                     self.grid_cols * grid_image.shape[1] * self.tile_cols),
+                    'uint16')
+            self.grid_preview[
+                (r * self.tile_rows + tile_r) * grid_image.shape[0]:
+                (r * self.tile_rows + tile_r + 1) * grid_image.shape[0],
+                (c * self.tile_cols + tile_c) * grid_image.shape[1]:
+                (c * self.tile_cols + tile_c + 1) * grid_image.shape[1]
+                ] = grid_image
+        else:
+            if (r, c) == (0, 0):
+                self.grid_preview = np.zeros(
+                    (self.grid_rows * grid_image.shape[0],
+                     self.grid_cols * grid_image.shape[1]), 'uint16')
+            self.grid_preview[
+                r * grid_image.shape[0]:(r + 1) * grid_image.shape[0],
+                c * grid_image.shape[1]:(c + 1) * grid_image.shape[1]
+                ] = grid_image
         self.scope.display.show_grid_preview(self.grid_preview)
         # check before re-run:
         if (not self.canceled_grid.get() and
