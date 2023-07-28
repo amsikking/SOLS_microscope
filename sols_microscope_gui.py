@@ -904,13 +904,27 @@ class GuiMicroscope:
                 for c in range(self.grid_cols):
                     if self.grid_button_enabled_array[r][c].get():
                         self.grid_location_rc = [r, c]
-                        # get updated position:
-                        self.grid_position_mm = self.check_XY_stage()
                         self.update_grid_location()
+                        # get current position and spacing:
+                        XY_stage_position_mm = self.check_XY_stage()
+                        spacing_mm = self.grid_spacing_um / 1000
+                        # set home position:
+                        self.grid_home_mm = [
+                            XY_stage_position_mm[0] + c * spacing_mm,
+                            XY_stage_position_mm[1] - r * spacing_mm]
+                        # make grid of positions:
+                        self.grid_positions_mm = [
+                            [None for c in range(
+                                self.grid_cols)] for j in range(self.grid_rows)]
+                        for rows in range(self.grid_rows):
+                            for cols in range(self.grid_cols):
+                                self.grid_positions_mm[rows][cols] = [
+                                    self.grid_home_mm[0] - cols * spacing_mm,
+                                    self.grid_home_mm[1] + rows * spacing_mm]
+                        # allow moves:
                         self.move_to_grid_location_button.config(state='normal')
                         if self.grid_location_rc == [0, 0]:
                             self.start_grid_button.config(state='normal')
-                            self.grid_home_mm = self.check_XY_stage()
                         else:
                             self.start_grid_button.config(state='disabled')
                         self.running_set_grid_location.set(0)
@@ -953,32 +967,20 @@ class GuiMicroscope:
                 for c in range(self.grid_cols):
                     if (self.grid_button_enabled_array[r][c].get() and
                         [r, c] != self.grid_location_rc):
-                        # calculate move size:
-                        spacing_mm = self.grid_spacing_um / 1000
-                        move_rows = r - self.grid_location_rc[0]
-                        move_cols = c - self.grid_location_rc[1]
-                        Y_move_mm =   move_rows * spacing_mm
-                        X_move_mm = - move_cols * spacing_mm
-                        # relative to original grid:
-                        XY_stage_position_mm = [
-                            self.grid_position_mm[0] + X_move_mm,
-                            self.grid_position_mm[1] + Y_move_mm]
                         # update gui, apply and display:
+                        XY_stage_position_mm = self.grid_positions_mm[r][c]
                         self.gui_xy_stage.update_position(XY_stage_position_mm)
                         self.apply_settings(
                             single_volume=True, check_XY_stage=False)
                         self.last_acquire_task.join()# don't accumulate acquires
                         self.last_acquire_task = self.scope.acquire()
-                        # update attributes:
+                        # update attributes and buttons:
                         self.grid_location_rc = [r, c]
-                        self.grid_position_mm = XY_stage_position_mm
                         self.update_grid_location()
-                        self.cancel_move_to_grid()
-                        if self.grid_location_rc == [0, 0]:
+                        self.start_grid_button.config(state='disabled')
+                        if [r, c] == [0, 0]:
                             self.start_grid_button.config(state='normal')
-                            self.grid_home_mm = XY_stage_position_mm
-                        else:
-                            self.start_grid_button.config(state='disabled')
+                        self.cancel_move_to_grid()
                         return None
             self.root.after(self.gui_delay_ms, self.run_move_to_grid)
         return None
@@ -1000,32 +1002,29 @@ class GuiMicroscope:
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_grid'
-        # calculate move size:
-        spacing_mm = self.grid_spacing_um / 1000
-        # generate grid rows/cols and positions:
+        # generate rows/cols list:
         self.XY_grid_rc_list = []
-        self.XY_grid_position_list = []
         for r in range(self.grid_rows):
             for c in range(self.grid_cols):
                 self.XY_grid_rc_list.append([r, c])
-                XY_stage_position_mm = [self.grid_home_mm[0] - c * spacing_mm,
-                                        self.grid_home_mm[1] + r * spacing_mm]
-                self.XY_grid_position_list.append(XY_stage_position_mm)
         self.current_grid_image = 0
         self.run_grid()
         return None
 
     def run_grid(self):
-        # get image and display:
         r, c = self.XY_grid_rc_list[self.current_grid_image]
-        self.gui_xy_stage.update_position(
-            self.XY_grid_position_list[self.current_grid_image])
+        # update gui and move stage:
+        self.gui_xy_stage.update_position(self.grid_positions_mm[r][c])
         self.apply_settings(single_volume=True, check_XY_stage=False)
+        self.grid_location_rc = [r, c]
+        self.update_grid_location()
+        # get filename and check mode:
         filename = '%s%i.tif'%(chr(ord('@')+r + 1), c + 1)
         preview_only = True
         if self.save_grid_data_and_position.get():
             preview_only = False
             self.update_position_list()
+        # get image and display:
         self.scope.acquire(
             filename=filename,
             folder_name=self.folder_name,
@@ -1043,8 +1042,9 @@ class GuiMicroscope:
             r * grid_image.shape[0]:(r + 1) * grid_image.shape[0],
             c * grid_image.shape[1]:(c + 1) * grid_image.shape[1]] = grid_image
         self.scope.display.show_grid_preview(self.grid_preview)
+        # check before re-run:
         if (not self.canceled_grid.get() and
-            self.current_grid_image < len(self.XY_grid_position_list) - 1): 
+            self.current_grid_image < len(self.XY_grid_rc_list) - 1): 
             self.current_grid_image += 1
             self.root.after(self.gui_delay_ms, self.run_grid)
         else:
