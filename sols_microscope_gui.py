@@ -619,16 +619,16 @@ class GuiMicroscope:
         button_width, button_height = 25, 2
         spinbox_width = 20
         # auto update settings button:
-        self.auto_update_settings_enabled = tk.BooleanVar()
-        auto_update_settings_button = tk.Checkbutton(
+        self.running_update_settings = tk.BooleanVar()
+        update_settings_button = tk.Checkbutton(
             self.output_frame,
             text='Auto update (On/Off)',
-            variable=self.auto_update_settings_enabled,
-            command=self.init_auto_update_settings,
+            variable=self.running_update_settings,
+            command=self.init_update_settings,
             indicatoron=0,
             width=button_width,
             height=button_height)
-        auto_update_settings_button.grid(row=0, column=0, padx=10, pady=10)
+        update_settings_button.grid(row=0, column=0, padx=10, pady=10)
         # volumes per second textbox:
         self.volumes_per_s_textbox = tkcw.Textbox(
             self.output_frame,
@@ -692,6 +692,7 @@ class GuiMicroscope:
         self.grid_cols = 4
         self.grid_spacing_um = 1000
         # set location:
+        self.running_set_grid_location = tk.BooleanVar()
         self.set_grid_location_button = tk.Button(
             self.grid_frame,
             text="Set grid location",
@@ -710,6 +711,7 @@ class GuiMicroscope:
         self.current_grid_location_textbox.grid(
             row=3, column=0, padx=10, pady=10)
         # move to location:
+        self.running_move_to_grid = tk.BooleanVar()
         self.move_to_grid_location_button = tk.Button(
             self.grid_frame,
             text="Move to grid location",
@@ -735,6 +737,7 @@ class GuiMicroscope:
             variable=self.tile_grid)
         tile_grid_button.grid(row=6, column=0, padx=10, pady=10, sticky='w')
         # start grid:
+        self.running_grid = tk.BooleanVar()
         self.start_grid_button = tk.Button(
             self.grid_frame,
             text="Start grid preview (from A1)",
@@ -744,7 +747,6 @@ class GuiMicroscope:
         self.start_grid_button.grid(row=7, column=0, padx=10, pady=10)
         self.start_grid_button.config(state='disabled')
         # cancel grid:
-        self.canceled_grid = tk.BooleanVar()
         self.cancel_grid_button = tk.Button(
             self.grid_frame,
             text="Cancel grid preview",
@@ -900,8 +902,7 @@ class GuiMicroscope:
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         self.set_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
         self.generate_grid_buttons(self.set_grid_location_popup)
-        self.running_set_grid_location = tk.BooleanVar()
-        self.running_set_grid_location.set(1)
+        self.set_running_mode('set_grid_location', enable=True)
         self.run_set_grid_location()
         return None
 
@@ -963,8 +964,7 @@ class GuiMicroscope:
         r, c = self.grid_location_rc
         self.grid_button_enabled_array[r][c].set(1)
         self.grid_button_array[r][c].config(state='disabled')
-        self.running_move_to_grid = tk.BooleanVar()
-        self.running_move_to_grid.set(1)
+        self.set_running_mode('move_to_grid', enable=True)
         self.run_move_to_grid()
         return None
 
@@ -999,13 +999,7 @@ class GuiMicroscope:
 
     def init_grid(self):
         print('\nGrid -> started')
-        # stop other gui modes:
-        self.auto_update_settings_enabled.set(0)
-        self.live_mode_enabled.set(0)
-        self.scout_mode_enabled.set(0)
-        self.canceled_tile.set(1)
-        self.canceled_acquire.set(1)
-        self.canceled_grid.set(0)
+        self.set_running_mode('grid', enable=True)
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_grid'
@@ -1087,7 +1081,7 @@ class GuiMicroscope:
                 ] = grid_image
         self.scope.display.show_grid_preview(self.grid_preview)
         # check before re-run:
-        if (not self.canceled_grid.get() and
+        if (self.running_grid.get() and
             self.current_grid_image < len(self.XY_grid_rc_list) - 1): 
             self.current_grid_image += 1
             self.root.after(self.gui_delay_ms, self.run_grid)
@@ -1096,7 +1090,7 @@ class GuiMicroscope:
         return None
 
     def cancel_grid(self):
-        self.canceled_grid.set(1)
+        self.running_grid.set(0)
         print('\n ***Grid -> canceled*** \n')
         return None
 
@@ -1128,6 +1122,7 @@ class GuiMicroscope:
         save_tile_data_and_position_button.grid(
             row=1, column=0, padx=10, pady=10)
         # start tile:
+        self.running_tile = tk.BooleanVar()
         start_tile_button = tk.Button(
             self.tile_frame,
             text="Start tile",
@@ -1136,7 +1131,6 @@ class GuiMicroscope:
             height=button_height)
         start_tile_button.grid(row=2, column=0, padx=10, pady=10)
         # cancel tile:
-        self.canceled_tile = tk.BooleanVar()
         cancel_tile_button = tk.Button(
             self.tile_frame,
             text="Cancel tile",
@@ -1145,6 +1139,7 @@ class GuiMicroscope:
             height=button_height)
         cancel_tile_button.grid(row=3, column=0, padx=10, pady=10)
         # move to tile:
+        self.running_move_to_tile = tk.BooleanVar()
         self.move_to_tile_button = tk.Button(
             self.tile_frame,
             text="Move to tile",
@@ -1157,11 +1152,7 @@ class GuiMicroscope:
 
     def init_tile(self):
         print('\nTile -> started')
-        self.auto_update_settings_enabled.set(0)
-        self.live_mode_enabled.set(0)
-        self.scout_mode_enabled.set(0)
-        self.canceled_acquire.set(1)
-        self.canceled_tile.set(0)
+        self.set_running_mode('tile', enable=True)
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_tile'
@@ -1214,7 +1205,7 @@ class GuiMicroscope:
             r * tile.shape[0]:(r + 1) * tile.shape[0],
             c * tile.shape[1]:(c + 1) * tile.shape[1]] = tile
         self.scope.display.show_tile_preview(self.tile_preview)
-        if (not self.canceled_tile.get() and
+        if (self.running_tile.get() and
             self.current_tile < len(self.XY_tile_position_list) - 1): 
             self.current_tile += 1
             self.root.after(self.gui_delay_ms, self.run_tile)
@@ -1224,7 +1215,7 @@ class GuiMicroscope:
         return None
 
     def cancel_tile(self):
-        self.canceled_tile.set(1)
+        self.running_tile.set(0)
         print('\n ***Tile -> canceled*** \n')
         return None
 
@@ -1268,8 +1259,7 @@ class GuiMicroscope:
         r, c = self.XY_tile_rc_list[self.current_tile]
         self.tile_button_enabled_array[r][c].set(1)
         self.tile_button_array[r][c].config(state='disabled')
-        self.running_move_to_tile = tk.BooleanVar()
-        self.running_move_to_tile.set(1)
+        self.set_running_mode('move_to_tile', enable=True)
         self.run_move_to_tile()
         return None
 
@@ -1513,22 +1503,22 @@ class GuiMicroscope:
         button_width, button_height = 25, 2
         spinbox_width = 20
         # live mode:
-        self.live_mode_enabled = tk.BooleanVar()
+        self.running_live = tk.BooleanVar()
         live_mode_button = tk.Checkbutton(
             self.acquire_frame,
             text='Live mode (On/Off)',
-            variable=self.live_mode_enabled,
+            variable=self.running_live,
             command=self.init_live_mode,
             indicatoron=0,
             width=button_width,
             height=button_height)
         live_mode_button.grid(row=0, column=0, padx=10, pady=10)
         # scout mode:
-        self.scout_mode_enabled = tk.BooleanVar()
+        self.running_scout = tk.BooleanVar()
         scout_mode_button = tk.Checkbutton(
             self.acquire_frame,
             text='Scout mode (On/Off)',
-            variable=self.scout_mode_enabled,
+            variable=self.running_scout,
             command=self.init_scout_mode,
             indicatoron=0,
             width=button_width,
@@ -1561,7 +1551,6 @@ class GuiMicroscope:
         run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
         run_acquire_button.bind('<Enter>', self.get_tkfocus)
         # cancel acquire:
-        self.canceled_acquire = tk.BooleanVar()
         cancel_acquire_button = tk.Button(
             self.acquire_frame,
             text="Cancel acquire",
@@ -1807,16 +1796,15 @@ class GuiMicroscope:
         self.total_time_textbox.textbox.insert('1.0', text)
         return None
 
-    def init_auto_update_settings(self):
-        self.live_mode_enabled.set(0)
-        self.scout_mode_enabled.set(0)
-        self.auto_update_settings()
+    def init_update_settings(self):
+        self.set_running_mode('update_settings')
+        self.update_settings()
 
-    def auto_update_settings(self):
-        if self.auto_update_settings_enabled.get():
+    def update_settings(self):
+        if self.running_update_settings.get():
             self.apply_settings(check_XY_stage=False)
             self.update_gui_settings_output()
-            self.root.after(self.gui_delay_ms, self.auto_update_settings)
+            self.root.after(self.gui_delay_ms, self.update_settings)
         return None
 
     def loop_snoutfocus(self):
@@ -1857,15 +1845,14 @@ class GuiMicroscope:
         return None
 
     def init_live_mode(self):
-        self.auto_update_settings_enabled.set(0)
-        self.scout_mode_enabled.set(0)
+        self.set_running_mode('live')
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()
         self.run_live_mode()
         return None
 
     def run_live_mode(self):
-        if self.live_mode_enabled.get():
+        if self.running_live.get():
             self.apply_settings(single_volume=True, check_XY_stage=False)
             self.last_acquire_task.join() # don't accumulate acquires
             self.last_acquire_task = self.scope.acquire()
@@ -1896,12 +1883,11 @@ class GuiMicroscope:
         return None
 
     def init_scout_mode(self):
-        self.auto_update_settings_enabled.set(0)
-        self.live_mode_enabled.set(0)
+        self.set_running_mode('scout')
         self.enable_XYZ_navigation_buttons(True)
         self.apply_settings(single_volume=True)
         self.update_gui_settings_output()        
-        if self.scout_mode_enabled.get():
+        if self.running_scout.get():
             self.last_acquire_task.join() # don't accumulate acquires
             self.last_acquire_task = self.scope.acquire()
         self.run_scout_mode()
@@ -2011,7 +1997,7 @@ class GuiMicroscope:
         return None
 
     def run_scout_mode(self):
-        if self.scout_mode_enabled.get():
+        if self.running_scout.get():
             def snap():
                 self.apply_settings(single_volume=True, check_XY_stage=False)
                 self.last_acquire_task.join() # don't accumulate acquires
@@ -2043,11 +2029,7 @@ class GuiMicroscope:
 
     def init_acquire(self):
         print('\nAcquire -> started')
-        self.auto_update_settings_enabled.set(0)
-        self.live_mode_enabled.set(0)
-        self.scout_mode_enabled.set(0)
-        self.canceled_acquire.set(0)
-        self.running_acquire.set(1)
+        self.set_running_mode('acquire', enable=True)
         self.apply_settings()
         self.update_position_list()
         self.update_gui_settings_output()
@@ -2068,7 +2050,7 @@ class GuiMicroscope:
                            delay_s=delay_s)
         self.acquire_count += 1
         if (self.acquire_count < self.acquire_number
-            and not self.canceled_acquire.get()): # acquire again
+            and self.running_acquire.get()): # acquire again
                 wait_ms = int(round(
                     0.99 * 1e3 * (self.scope.buffer_time_s + delay_s)))
                 self.root.after(wait_ms, self.run_acquire) 
@@ -2079,8 +2061,31 @@ class GuiMicroscope:
         return None
 
     def cancel_acquire(self):
-        self.canceled_acquire.set(1)
+        self.running_acquire.set(0)
         print('\n ***Acquire -> canceled*** \n')
+        return None
+
+    def set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
+        # define mode activation dictionary:
+        mode_to_variable = {
+            'update_settings':self.running_update_settings,
+            'set_grid_location':self.running_set_grid_location,
+            'move_to_grid':self.running_move_to_grid,
+            'grid':self.running_grid,
+            'tile':self.running_tile,
+            'move_to_tile':self.running_move_to_tile,
+            'live':self.running_live,
+            'scout':self.running_scout,
+            'acquire':self.running_acquire
+            }
+        variable = mode_to_variable[mode]
+        # turn everything off except current mode:
+        for v in mode_to_variable.values():
+            if v != variable:
+                v.set(0)
+        # optionally enable the mode if not done by 'CheckButton':
+        if enable:
+            variable.set(1)
         return None
 
     def close(self):
