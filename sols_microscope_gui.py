@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import font
 from tkinter import filedialog
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 import sols_microscope as sols
 import tkinter_compound_widgets as tkcw
@@ -1029,16 +1030,16 @@ class GuiMicroscope:
     def run_grid(self):
         if self.tile_grid.get():
             r, c, tile_r, tile_c = self.XY_grid_rc_list[self.current_grid_image]
-            filename = '%s%i_r%ic%i.tif'%(
-                chr(ord('@')+r + 1), c + 1, tile_r, tile_c)
+            name = '%s%i_r%ic%i'%(chr(ord('@')+r + 1), c + 1, tile_r, tile_c)
             XY_stage_position_mm = [
                 self.grid_positions_mm[r][c][0] - tile_c * self.tile_X_mm,
                 self.grid_positions_mm[r][c][1] + tile_r * self.tile_Y_mm]
             self.gui_xy_stage.update_position(XY_stage_position_mm)
         else:
             r, c = self.XY_grid_rc_list[self.current_grid_image]
-            filename = '%s%i.tif'%(chr(ord('@')+r + 1), c + 1)
+            name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
             self.gui_xy_stage.update_position(self.grid_positions_mm[r][c])
+        filename = name + '.tif'
         # update gui and move stage:
         self.apply_settings(single_volume=True, check_XY_stage=False)
         self.grid_location_rc = [r, c]
@@ -1048,7 +1049,7 @@ class GuiMicroscope:
         if self.save_grid_data_and_position.get():
             preview_only = False
             self.update_position_list()
-        # get image and display:
+        # get image:
         self.scope.acquire(
             filename=filename,
             folder_name=self.folder_name,
@@ -1058,27 +1059,36 @@ class GuiMicroscope:
         while not os.path.isfile(grid_preview_filename):
             self.root.after(self.gui_delay_ms)
         grid_image = imread(grid_preview_filename)
+        shape = grid_image.shape
+        # add reference:
+        grid_image = Image.fromarray(grid_image) # convert to ImageDraw format
+        XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
+        font_size = int(0.1 * min(shape))
+        font = ImageFont.truetype('arial.ttf', font_size)
+        ImageDraw.Draw(grid_image).text(XY, name, fill=0, font=font)
+        # make grid image:
         if self.tile_grid.get():
             if (r, c, tile_r, tile_c) == (0, 0, 0, 0):
                 self.grid_preview = np.zeros(
-                    (self.grid_rows * grid_image.shape[0] * self.tile_rows,
-                     self.grid_cols * grid_image.shape[1] * self.tile_cols),
+                    (self.grid_rows * shape[0] * self.tile_rows,
+                     self.grid_cols * shape[1] * self.tile_cols),
                     'uint16')
             self.grid_preview[
-                (r * self.tile_rows + tile_r) * grid_image.shape[0]:
-                (r * self.tile_rows + tile_r + 1) * grid_image.shape[0],
-                (c * self.tile_cols + tile_c) * grid_image.shape[1]:
-                (c * self.tile_cols + tile_c + 1) * grid_image.shape[1]
+                (r * self.tile_rows + tile_r) * shape[0]:
+                (r * self.tile_rows + tile_r + 1) * shape[0],
+                (c * self.tile_cols + tile_c) * shape[1]:
+                (c * self.tile_cols + tile_c + 1) * shape[1]
                 ] = grid_image
         else:
             if (r, c) == (0, 0):
                 self.grid_preview = np.zeros(
-                    (self.grid_rows * grid_image.shape[0],
-                     self.grid_cols * grid_image.shape[1]), 'uint16')
+                    (self.grid_rows * shape[0],
+                     self.grid_cols * shape[1]), 'uint16')
             self.grid_preview[
-                r * grid_image.shape[0]:(r + 1) * grid_image.shape[0],
-                c * grid_image.shape[1]:(c + 1) * grid_image.shape[1]
+                r * shape[0]:(r + 1) * shape[0],
+                c * shape[1]:(c + 1) * shape[1]
                 ] = grid_image
+        # display:
         self.scope.display.show_grid_preview(self.grid_preview)
         # check before re-run:
         if (self.running_grid.get() and
@@ -1178,12 +1188,14 @@ class GuiMicroscope:
         return None
 
     def run_tile(self):           
-        # get tile and display:
+        # update position:
         r, c = self.XY_tile_rc_list[self.current_tile]
         self.gui_xy_stage.update_position(
             self.XY_tile_position_list[self.current_tile])
         self.apply_settings(single_volume=True, check_XY_stage=False)
-        filename = 'r%ic%i.tif'%(r, c)
+        # get tile:
+        name = "r%ic%i"%(r, c)
+        filename = name + '.tif'
         preview_only = True
         if self.save_tile_data_and_position.get():
             preview_only = False
@@ -1197,13 +1209,23 @@ class GuiMicroscope:
         while not os.path.isfile(tile_filename):
             self.root.after(self.gui_delay_ms)
         tile = imread(tile_filename)
+        shape = tile.shape
+        # add reference:
+        tile = Image.fromarray(tile) # convert to PIL format for ImageDraw
+        XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
+        font_size = int(0.1 * min(shape))
+        font = ImageFont.truetype('arial.ttf', font_size)
+        ImageDraw.Draw(tile).text(XY, name, fill=0, font=font)
+        # make base image:
         if (r, c) == (0, 0):
             self.tile_preview = np.zeros(
-                (self.tile_rows * tile.shape[0],
-                 self.tile_cols * tile.shape[1]), 'uint16')
+                (self.tile_rows * shape[0],
+                 self.tile_cols * shape[1]), 'uint16')
+        # add current tile:
         self.tile_preview[
-            r * tile.shape[0]:(r + 1) * tile.shape[0],
-            c * tile.shape[1]:(c + 1) * tile.shape[1]] = tile
+            r * shape[0]:(r + 1) * shape[0],
+            c * shape[1]:(c + 1) * shape[1]] = tile
+        # display:
         self.scope.display.show_tile_preview(self.tile_preview)
         if (self.running_tile.get() and
             self.current_tile < len(self.XY_tile_position_list) - 1): 
@@ -1248,7 +1270,7 @@ class GuiMicroscope:
                 self.tile_button_enabled_array[r][c] = tk.BooleanVar()
                 self.tile_button_array[r][c] = tk.Checkbutton(
                     self.tile_buttons_frame,
-                    text='%i%i'%(r, c),
+                    text='r%ic%i'%(r, c),
                     variable=self.tile_button_enabled_array[r][c],
                     indicatoron=0,
                     width=button_width,
