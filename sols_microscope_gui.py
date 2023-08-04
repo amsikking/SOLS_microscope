@@ -1,4 +1,5 @@
 import os
+import time
 import copy
 from datetime import datetime
 import tkinter as tk
@@ -587,6 +588,14 @@ class GuiMicroscope:
             default_value=1,
             row=3,
             width=spinbox_width)
+        # loop over positions:
+        self.loop_over_position_list = tk.BooleanVar()
+        loop_over_position_list_button = tk.Checkbutton(
+            self.settings_frame,
+            text='Loop over position list',
+            variable=self.loop_over_position_list)
+        loop_over_position_list_button.grid(
+            row=4, column=0, padx=10, pady=10, sticky='w')
         # acquire number spinbox:
         self.acquire_number_spinbox = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
@@ -596,18 +605,18 @@ class GuiMicroscope:
             min_value=1,
             max_value=1e6,
             default_value=1,
-            row=4,
+            row=5,
             width=spinbox_width)
         # delay spinbox:
         self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
-            label='Inter-acquire delay (s)',
+            label='Inter-acquire delay (s) >=',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=0,
             max_value=3600,
             default_value=0,
-            row=5,
+            row=6,
             width=spinbox_width)
         return None
 
@@ -654,10 +663,10 @@ class GuiMicroscope:
             row=3,
             width=spinbox_width,
             height=1)
-        # total time textbox:
-        self.total_time_textbox = tkcw.Textbox(
+        # min time textbox:
+        self.min_time_textbox = tkcw.Textbox(
             self.output_frame,
-            label='Total acquire time (s)',
+            label='Minimum acquire time (s)',
             default_text='None',
             row=4,
             width=spinbox_width,
@@ -1468,7 +1477,7 @@ class GuiMicroscope:
                   "focus_piezo_position_list.txt", "w") as file:
             file.write(self.session_folder + '\n')
         with open(self.session_folder +
-              "XY_stage_position_list.txt", "w") as file:
+                  "XY_stage_position_list.txt", "w") as file:
             file.write(self.session_folder + '\n')
         # update files:
         with open(self.session_folder +
@@ -1799,23 +1808,28 @@ class GuiMicroscope:
         memory_pct = 100 * total_memory_gb / max_memory_gb
         text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
         self.total_memory_textbox.textbox.delete('1.0', '10.0')
-        self.total_memory_textbox.textbox.insert('1.0', text)        
+        self.total_memory_textbox.textbox.insert('1.0', text)
+        # get position count:
+        positions = 1
+        if self.loop_over_position_list.get():
+            positions = max(len(self.XY_stage_position_list), 1)
         # calculate storage:
+        acquires = self.acquire_number_spinbox.value
         data_gb = 1e-9 * self.scope.bytes_per_data_buffer
         preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
-        total_storage_gb = (data_gb + preview_gb) * (
-            self.acquire_number_spinbox.value)
+        total_storage_gb = (data_gb + preview_gb) * positions * acquires
         text = '%0.3f'%total_storage_gb
         self.total_storage_textbox.textbox.delete('1.0', '10.0')
         self.total_storage_textbox.textbox.insert('1.0', text)        
         # calculate time:
-        acquire_time_s = (self.scope.buffer_time_s +
-                          self.delay_spinbox.value)
-        total_time_s = (
-            acquire_time_s * self.acquire_number_spinbox.value)
-        text = '%0.6f (%0.0f min)'%(total_time_s, (total_time_s / 60))
-        self.total_time_textbox.textbox.delete('1.0', '10.0')
-        self.total_time_textbox.textbox.insert('1.0', text)
+        min_acquire_time_s = self.scope.buffer_time_s * positions
+        min_total_time_s = min_acquire_time_s * acquires
+        if self.delay_spinbox.value > min_acquire_time_s:
+            min_total_time_s = (
+                self.delay_spinbox.value * (acquires - 1) + min_acquire_time_s)
+        text = '%0.6f (%0.0f min)'%(min_total_time_s, (min_total_time_s / 60))
+        self.min_time_textbox.textbox.delete('1.0', '10.0')
+        self.min_time_textbox.textbox.insert('1.0', text)
         return None
 
     def init_update_settings(self):
@@ -2053,30 +2067,57 @@ class GuiMicroscope:
         print('\nAcquire -> started')
         self.set_running_mode('acquire', enable=True)
         self.apply_settings()
-        self.update_position_list()
         self.update_gui_settings_output()
         self.folder_name = self.get_folder_name() + '_acquire'
         self.description = self.description_textbox.text
-        self.delay_s = self.delay_spinbox.value
-        self.acquire_number = self.acquire_number_spinbox.value
         self.acquire_count = 0
+        self.current_position = 0
+        self.total_positions = 0
+        if self.loop_over_position_list.get():
+            self.total_positions = len(self.XY_stage_position_list)        
         self.run_acquire()
         return None
 
     def run_acquire(self):
-        delay_s = self.delay_s
-        if self.acquire_count == 0: delay_s = 0 # avoid first delay_s
-        self.scope.acquire(filename='%06i.tif'%self.acquire_count,
-                           folder_name=self.folder_name,
-                           description=self.description,
-                           delay_s=delay_s)
-        self.acquire_count += 1
-        if (self.acquire_count < self.acquire_number
-            and self.running_acquire.get()): # acquire again
-                wait_ms = int(round(
-                    0.99 * 1e3 * (self.scope.buffer_time_s + delay_s)))
-                self.root.after(wait_ms, self.run_acquire) 
-        else: # finish up
+        if not self.running_acquire.get(): # check for cancel
+            return None
+        # don't launch all tasks: either wait 1 buffer time or apply delay:
+        wait_ms = int(round(1e3 * self.scope.buffer_time_s))
+        # check mode -> either single position or loop over positions:
+        if self.loop_over_position_list.get():
+            if self.current_position == 0:
+                self.loop_t0_s = time.perf_counter()
+            self.gui_focus_piezo.position_spinbox.update_and_validate(
+                self.focus_piezo_position_list[self.current_position])
+            self.gui_xy_stage.update_position(
+                self.XY_stage_position_list[self.current_position])
+            self.current_position_spinbox.update_and_validate(
+                self.current_position + 1)
+            self.apply_settings(check_XY_stage=False)
+            self.scope.acquire(filename='%06i_p%06i.tif'%(
+                self.acquire_count, self.current_position),
+                               folder_name=self.folder_name,
+                               description=self.description)
+            if self.current_position < (self.total_positions - 1):
+                self.current_position +=1
+            else:
+                self.current_position = 0
+                self.acquire_count += 1
+                loop_time_s = time.perf_counter() - self.loop_t0_s
+                if self.delay_spinbox.value > loop_time_s:
+                    wait_ms = int(round(1e3 * (
+                        self.delay_spinbox.value - loop_time_s)))                   
+        else:
+            self.scope.acquire(filename='%06i.tif'%self.acquire_count,
+                               folder_name=self.folder_name,
+                               description=self.description)
+            self.acquire_count += 1
+            if self.delay_spinbox.value > self.scope.buffer_time_s:
+                wait_ms = int(round(1e3 * self.delay_spinbox.value))
+        # check acquire count before re-run:
+        if self.acquire_count < self.acquire_number_spinbox.value:
+            self.root.after(wait_ms, self.run_acquire)
+        else:
             self.scope.finish_all_tasks()
             self.running_acquire.set(0)
             print('Acquire -> finished\n')
