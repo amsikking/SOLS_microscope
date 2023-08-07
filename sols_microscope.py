@@ -266,7 +266,7 @@ class Microscope:
         plt.show()
 
     def _prepare_to_save(
-        self, filename, folder_name, description, delay_s, preview_only):
+        self, filename, folder_name, description, preview_only):
         def make_folders(folder_name):
             os.makedirs(folder_name)
             os.makedirs(folder_name + '\data')
@@ -293,7 +293,6 @@ class Microscope:
             'filename':filename,
             'folder_name':folder_name,
             'description':description,
-            'delay_s':delay_s,
             'preview_only':preview_only,
             'channels_per_slice':tuple(self.channels_per_slice),
             'power_per_channel':tuple(self.power_per_channel),
@@ -475,13 +474,9 @@ class Microscope:
         self.unfinished_tasks.put(settings_thread)
         return settings_thread
 
-    def snoutfocus(self, filename=None, delay_s=None):
+    def snoutfocus(self, filename=None, settle_vibrations=True):
         def snoutfocus_task(custody):
             custody.switch_from(None, to=self.camera) # Safe to change settings
-            if delay_s is not None:
-                start_time = time.perf_counter()
-                if delay_s > 5: # 5 seconds to focus + settle vibrations
-                    time.sleep(delay_s - 5)
             if not self._settings_applied:
                 print("\n%s: ***WARNING*** -> settings not applied"%self.name)
                 print("%s: -> please apply legal settings"%self.name)
@@ -570,10 +565,8 @@ class Microscope:
             self.filter_wheel._finish_moving()
             write_voltages_thread.get_result()
             self._settings_applied = True
-            # We might want to hold camera custody for a fixed amount of time:
-            if delay_s is not None:
-                while time.perf_counter() - start_time < delay_s:
-                    time.sleep(0.001)
+            if settle_vibrations:
+                    time.sleep(2)
             custody.switch_from(self.camera, to=None)
             if filename is not None:
                 if not os.path.exists('sols_snoutfocus'):
@@ -593,13 +586,8 @@ class Microscope:
                 filename=None,      # None = no save, same string = overwrite
                 folder_name=None,   # None = new folder, same string = re-use
                 description=None,   # Optional metadata description
-                delay_s=None,       # Optional time delay baked in + Snoutfocus
                 display=True,       # Optional turn off
                 preview_only=False):# Save preview only, raw data discarded
-        delay_during_acquire = True # default apply delay_s during acquire task
-        if delay_s is not None and delay_s > 30:
-            self.snoutfocus(delay_s=delay_s) # Run snoutfocus for longer delays
-            delay_during_acquire = False # snoutfocus will apply the delay_s
         def acquire_task(custody):
             custody.switch_from(None, to=self.camera) # get camera
             if not self._settings_applied:
@@ -608,8 +596,6 @@ class Microscope:
                 print("%s: (all arguments must be specified at least once)")
                 custody.switch_from(self.camera, to=None)
                 return
-            if delay_during_acquire and delay_s is not None:
-                time.sleep(delay_s) # simple but not 'us' precise
             # must update XY stage position attributes in case joystick was used
             # no thread (blocking) so metatdata in _prepare_to_save is current
             self.XY_stage_position_mm = self.XY_stage.get_position_mm()
@@ -619,7 +605,6 @@ class Microscope:
                     args=(filename,
                           folder_name,
                           description,
-                          delay_s,
                           preview_only)).start()
             # We have custody of the camera so attribute access is safe:
             vo   = self.volumes_per_buffer
@@ -1051,13 +1036,12 @@ if __name__ == '__main__':
     folder_label = 'sols_test_data'
     dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_000_')
     folder_name = dt + folder_label
-    scope.snoutfocus(filename='snoutfocus.tif')
+    scope.snoutfocus(filename='snoutfocus.tif', settle_vibrations=True)
     for i in range(3):
         scope.acquire(
             filename='%06i.tif'%i,
             folder_name=folder_name,
             description='something...',
-            delay_s=0,
             display=True,
             preview_only=False,
             )
