@@ -1747,10 +1747,6 @@ class GuiMicroscope:
         XY_mm = file_settings['XY_stage_position_mm'].strip(
             '(').strip(')').split(',')
         XY_stage_position_mm = [float(XY_mm[0]), float(XY_mm[1])]
-        if file_settings['delay_s'] == 'None':
-            delay_s = None
-        else:
-            delay_s = int(file_settings['delay_s'])
         # turn off all illumination:
         self.gui_transmitted_light.power.checkbox_value.set(0)
         self.gui_laser_box.power405.checkbox_value.set(0)
@@ -1790,8 +1786,6 @@ class GuiMicroscope:
             voxel_aspect_ratio)
         self.gui_galvo.scan_range_um.update_and_validate(scan_range_um)
         self.volumes_spinbox.update_and_validate(volumes_per_buffer)
-        if delay_s is not None:
-            self.delay_spinbox.update_and_validate(delay_s)
         # apply the file settings:
         self.apply_settings(check_XY_stage=False)
         return None
@@ -2071,10 +2065,11 @@ class GuiMicroscope:
         self.folder_name = self.get_folder_name() + '_acquire'
         self.description = self.description_textbox.text
         self.acquire_count = 0
+        self.saved_delay_s = False
         self.current_position = 0
         self.total_positions = 0
         if self.loop_over_position_list.get():
-            self.total_positions = len(self.XY_stage_position_list)        
+            self.total_positions = len(self.XY_stage_position_list)
         self.run_acquire()
         return None
 
@@ -2114,6 +2109,12 @@ class GuiMicroscope:
             self.acquire_count += 1
             if self.delay_spinbox.value > self.scope.buffer_time_s:
                 wait_ms = int(round(1e3 * self.delay_spinbox.value))
+        # record gui delay:
+        if (not self.saved_delay_s and os.path.exists(self.folder_name)):
+            with open(self.folder_name + '\\'  "gui_delay_s.txt", "w") as file:
+                file.write(self.folder_name + '\n')
+                file.write('gui_delay_s: %i'%self.delay_spinbox.value + '\n')
+                self.saved_delay_s = True
         # check acquire count before re-run:
         if self.acquire_count < self.acquire_number_spinbox.value:
             self.root.after(wait_ms, self.run_acquire)
