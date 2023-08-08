@@ -28,101 +28,158 @@ if __name__ == '__main__': # required block for sols_microscope
         focus_piezo_z_um=(0,'relative'),        # = don't move
         XY_stage_position_mm=(0,0,'relative'),  # = don't move
         ).join()
+    
+    # Get current XY position for moving back at the end of the script:
+    x_mm_0, y_mm_0 = scope.XY_stage_position_mm
+    
+    # Setup minimal positions for no moving (current FOV only):
+    XY_stage_positions      = ((0, 0, 'relative'),)
+    focus_piezo_positions   = [[0,'relative'],]
+
+    # Optional XYZ moves from position lists collected by GUI:
+    # -> uncomment and copy paste lists to use...
+    # ***CAUTION WHEN MOVING XY STAGE -> DOUBLE CHECK POSITIONS***
+##    XY_stage_positions      = [ # copy past lists in here:
+##        # e.g. here's 2 XY positions:
+##        [-0.412, -4.9643],
+##        [-0.528025, -4.9643],
+##        ]
+##    focus_piezo_positions   = [ # copy past lists in here:
+##        # e.g. here's 2 focus positions:
+##        48,
+##        48,
+##        ]
+##    # convert to correct format for .apply_settings():
+##    for xy in XY_stage_positions:
+##        xy.append('absolute')
+##    for i, z in enumerate(focus_piezo_positions):
+##            focus_piezo_positions[i] = [z, 'absolute']
+
+    # Get number of positions:
+    assert len(focus_piezo_positions) == len(XY_stage_positions)
+    positions = len(XY_stage_positions)
 
     # Make folder name for data:
     folder_label = 'sols_acquisition_template'  # edit name to preference
     dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_000_')
     folder_name = dt + folder_label
 
-    # Decide on optional XYZ moves:
-    # for example options 1) to 3) -> uncomment and edit to try...   
-    # start by getting current XY stage position:
-    x_mm_0, y_mm_0 = scope.XY_stage_position_mm
-
-    # option 1) no moving: (current FOV only)
-    XY_stage_positions      = ((0, 0, 'relative'),)
-    focus_piezo_positions   = [[0,'relative'],]
-
-    # option 2) 'absolute' moves from metadata collected from scouting in GUI
-    # for exmple here's 2 FOV's:
-    # ***CAUTION WHEN MOVING XY STAGE -> DOUBLE CHECK POSITIONS FIRST***
-##    XY_stage_positions      = ( # tuple for non mutable
-##        (0.2421, -4.5275, 'absolute'),
-##        (0.2728, -4.5275, 'absolute')) # ~1 FOV to the 'right'
-##    focus_piezo_positions   = [ # list for autofocus update
-##        [42.7666473,'absolute'],
-##        [42.4185723,'absolute']] # some focus drift between fields
-    
-    # option 3) 'absolute' moves based on XY tile size from current settings:
-    # for example here's some positions for a 2x2 tile:
-    # ***CAUTION WHEN MOVING XY STAGE -> DOUBLE CHECK POSITIONS FIRST***
-##    move_pct = 90 # how much do you want to move? 100% = 1 full FOV
-##    ud_move_mm = 1e-3 * scope.scan_range_um * move_pct / 100
-##    lr_move_mm = 1e-3 * scope.width_px * sols.sample_px_um * move_pct / 100
-##    XY_stage_positions = ( # pick efficient order e.g. raster
-##        (x_mm_0, y_mm_0, 'absolute'),                           # 'zero'
-##        (x_mm_0 + lr_move_mm, y_mm_0, 'absolute'),              # 'right'
-##        (x_mm_0 + lr_move_mm, y_mm_0 + ud_move_mm, 'absolute'), # 'right'+'up'
-##        (x_mm_0, y_mm_0 + ud_move_mm, 'absolute'),              # 'up'
-##        )
-##    focus_piezo_positions   = len(XY_stage_positions) * [[0,'relative']]
-
-    # Get number of positions:
-    assert len(focus_piezo_positions) == len(XY_stage_positions)
-    positions = len(XY_stage_positions)
+    # Decide parameters for acquisition:
+    time_points = 2     # how many time points for full acquisition?
+    time_delay_s = None # delay between full acquisitions in seconds (or None)
+    # -> should run autofocus every few minutes to keep focus (< ~300s/5min?)
+    # autofocus every acquisition? or run autofocus at a higher rate?
+    autofocus_rate = 1  # 1 = once per acquire, 2 = twice per acquire, 3 =...
+    # -> can be used to keep focus but reduce data size/photodose
 
     # Run acquisition: (tzcyx)
-    iterations = 2      # how many iterations?
-    time_delay_s = 0    # optional time delay
+    iterations = time_points * autofocus_rate
+    current_time_point = 0
+    current_autofocus_point = 1
     for i in range(iterations):
+        print('\nRunning iteration %i:'%i)
+        # check if full acquisition or software autofocus:
+        full_acquire = False
+        if not i%autofocus_rate:
+            full_acquire = True
+        # start timer:
+        t0 = time.perf_counter()
         scope.snoutfocus() # apply thermal stabilization routine
         for p in range(positions):
             # Move to XYZ position:
             # -> also applies 'z_change_um' for software autofocus (if active)
             scope.apply_settings(focus_piezo_z_um=focus_piezo_positions[p],
                                  XY_stage_position_mm=XY_stage_positions[p])
-            # Multi-color acquisition:
-            filename488 = '488_%06i_%03i.tif'%(i, p)
-            scope.apply_settings(illumination_time_us=1*1e3,
-                                 channels_per_slice=('488',),
-                                 power_per_channel=(5,),
-                                 emission_filter='LP02-488RU')
-            scope.acquire(filename=filename488,
-                          folder_name=folder_name,
-                          description='488 something...',
-                          preview_only=False)
-            filename561 = '561_%06i_%03i.tif'%(i, p)
-            scope.apply_settings(illumination_time_us=1*1e3,
-                                 channels_per_slice=('561',),
-                                 power_per_channel=(5,),
-                                 emission_filter='LP02-561RU')
-            scope.acquire(filename=filename561,
-                          folder_name=folder_name,
-                          description='561 something...',
-                          preview_only=False)
+            if full_acquire: # set setting and acquire:
+                print('-> full acquisition %i (position:%i)'%(
+                    current_time_point, p))
+                # 488 example:
+                filename488 = '488_%06i_%06i.tif'%(current_time_point, p)
+                scope.apply_settings(
+                    channels_per_slice=('488',),
+                    power_per_channel=(5,),
+                    emission_filter='LP02-488RU',
+                    illumination_time_us=1*1e3,
+                    voxel_aspect_ratio=2,
+                    scan_range_um=100,
+                    volumes_per_buffer=1,
+                    )
+                scope.acquire(filename=filename488,
+                              folder_name=folder_name,
+                              description='488 something...',
+                              preview_only=False)
+                # 561 example:
+                filename561 = '561_%06i_%06i.tif'%(current_time_point, p)
+                scope.apply_settings(
+                    channels_per_slice=('561',),
+                    power_per_channel=(5,),
+                    emission_filter='LP02-561RU',
+                    illumination_time_us=1*1e3,
+                    voxel_aspect_ratio=2,
+                    scan_range_um=100,
+                    volumes_per_buffer=1,
+                    )
+                scope.acquire(filename=filename561,
+                              folder_name=folder_name,
+                              description='561 something...',
+                              preview_only=False)
             # Software autofocus (optional):
+            else:
+                print('-> autofocus acquisition (position:%i)'%p)
+                # 488 autofocus example:
+                filename488 = 'af488_%06i_%06i_%06i.tif'%(
+                    (current_time_point - 1), p, current_autofocus_point)
+                # trim down settings for increased speed/reduced photodose:
+                scope.apply_settings(
+                    channels_per_slice=('488',),
+                    power_per_channel=(1,),
+                    emission_filter='LP02-488RU',
+                    illumination_time_us=1*1e3,
+                    voxel_aspect_ratio=10,
+                    scan_range_um=100,
+                    volumes_per_buffer=1,
+                    )
+                scope.acquire(filename=filename488,
+                              folder_name=folder_name,
+                              description='488 autofocus',
+                              preview_only=True)
+            # run autofocus routine:
             scope.finish_all_tasks() # must finish before looking at preview!
             autofocus_filename = filename488 # which filename for autofocus?
-            # get parameters to estimate z: (these must match the chosen file!)
-            h_px, w_px = scope.height_px, scope.width_px
-            l_px, c_px = scope.preview_line_px, scope.preview_crop_px
-            tsm = scope.timestamp_mode
-            if i == 0: # get set point for z from first preview (set by user)
-                preview_0 = imread( # 1 2D image from preview! (1 vol, 1 ch)
-                    folder_name + '\preview\\' + autofocus_filename)
-                z_um_0 = dataz.estimate(preview_0, h_px, w_px, l_px, c_px, tsm)
-            preview_n = imread(     # 1 2D image from preview! (1 vol, 1 ch)
+            preview = imread( # 1 2D image from preview! (1 vol, 1 ch)
                 folder_name + '\preview\\' + autofocus_filename)
-            z_um_n = dataz.estimate(preview_n, h_px, w_px, l_px, c_px, tsm)
-            z_change_um = z_um_n - z_um_0
-            print('Sample z-axis change um:', z_change_um)
+            z_um = dataz.estimate(preview, # parameters must match preview file!
+                                  scope.height_px,
+                                  scope.width_px,
+                                  scope.preview_line_px,
+                                  scope.preview_crop_px,
+                                  scope.timestamp_mode)
+            if i == 0: # get set point for z from first preview (set by user)
+                z_um_0 = z_um
+            z_change_um = z_um - z_um_0
+            print('Sample z-axis change um: %0.3f\n'%z_change_um)
             # update focus piezo positions with measured drift:
             focus_piezo_positions[p] = [scope.focus_piezo_z_um + z_change_um,
                                         'absolute']
-        # Apply time delay:
-        if i + 1 == iterations:
-            break # avoid last unecessary delay
-        time.sleep(time_delay_s)
+        # finish timing and increment time point if applicable:
+        loop_time_s = time.perf_counter() - t0
+        if full_acquire:
+            current_time_point += 1
+            current_autofocus_point = 1
+            if current_time_point == time_points:
+                break # avoid last delay/autofocus routine
+        else:
+            current_autofocus_point += 1
+        # Apply time delay if applicable:
+        if time_delay_s is not None:
+            time_delay_s = time_delay_s / autofocus_rate
+            if time_delay_s > loop_time_s:
+                print('\nApplying time_delay_s: %0.2f'%time_delay_s)
+                time.sleep(time_delay_s - loop_time_s)
+            else:
+                print('\n***WARNING***')
+                print('time_delay_s not applied (loop_time_s > time_delay_s)')
+
     # return to 'zero' starting position for user convenience
     scope.apply_settings(focus_piezo_z_um=focus_piezo_positions[0],
                          XY_stage_position_mm=(x_mm_0, y_mm_0, 'absolute'))
