@@ -73,6 +73,8 @@ if __name__ == '__main__': # required block for sols_microscope
     # -> can be used to keep focus but reduce data size/photodose
 
     # Run acquisition: (tzcyx)
+    if time_delay_s is not None:
+        time_delay_s = time_delay_s / autofocus_rate
     iterations = time_points * autofocus_rate
     current_time_point = 0
     current_autofocus_point = 1
@@ -172,7 +174,6 @@ if __name__ == '__main__': # required block for sols_microscope
             current_autofocus_point += 1
         # Apply time delay if applicable:
         if time_delay_s is not None:
-            time_delay_s = time_delay_s / autofocus_rate
             if time_delay_s > loop_time_s:
                 print('\nApplying time_delay_s: %0.2f'%time_delay_s)
                 time.sleep(time_delay_s - loop_time_s)
