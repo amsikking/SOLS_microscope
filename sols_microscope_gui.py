@@ -283,7 +283,7 @@ class GuiGalvo:
 
 class GuiFocusPiezo:
     def __init__(self, master):
-        frame = tk.LabelFrame(master, text='FOCUS PIEZO', bd=6)
+        frame = tk.LabelFrame(master, text='FOCUS PIEZO (Scout mode)', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
         self.min, self.max = 0, 100
         self.center = int(round((self.max - self.min) / 2))
@@ -366,7 +366,7 @@ class GuiFocusPiezo:
 
 class GuiXYStage:
     def __init__(self, master):
-        frame = tk.LabelFrame(master, text='XY STAGE', bd=6)
+        frame = tk.LabelFrame(master, text='XY STAGE (Scout mode)', bd=6)
         frame.grid(row=3, column=2, rowspan=2, columnspan=2,
                    padx=10, pady=10, sticky='n')
         # last move textbox:
@@ -521,25 +521,27 @@ class GuiMicroscope:
             for k in gui_settings.keys():
                 self.applied_settings[k] = None
             self.apply_settings(check_XY_stage=False) # mandatory call
-            # get scope ready:
-            self.loop_snoutfocus()
-            self.last_acquire_task = self.scope.acquire() # snap a volume
             # make session folder and position lists:
             dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
             self.session_folder = dt + 'sols_gui_session\\'
             os.makedirs(self.session_folder)
             self.make_empty_position_list()
+            # get scope ready:
+            self.loop_snoutfocus()
+            self.last_acquire_task = self.scope.acquire() # snap a volume
+            self.running_scout.set(1)
+            self.init_scout_mode()
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
 
     def init_quit_button(self):
-        quit_frame = tk.LabelFrame(self.root, text='QUIT', bd=6)
-        quit_frame.grid(
-            row=6, column=0, columnspan=6, padx=10, pady=10, sticky='n')
+        quit_frame = tk.LabelFrame(
+            self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
+        quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
         quit_gui_button = tk.Button(
             quit_frame,
-            text="QUIT GUI",
+            text="EXIT GUI",
             command=self.close,
             height=2,
             width=25)
@@ -547,7 +549,7 @@ class GuiMicroscope:
 
     def init_gui_settings(self):
         self.settings_frame = tk.LabelFrame(
-            self.root, text='SETTINGS', bd=6)
+            self.root, text='SETTINGS (misc)', bd=6)
         self.settings_frame.grid(
             row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
         self.settings_frame.bind('<Enter>', self.get_tkfocus) # force update
@@ -556,8 +558,9 @@ class GuiMicroscope:
         # load from file:
         load_from_file_button = tk.Button(
             self.settings_frame,
-            text="Load from metadata file",
+            text="Load from file",
             command=self.load_settings_from_file,
+            font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
         load_from_file_button.grid(row=0, column=0, padx=10, pady=10)
@@ -636,6 +639,7 @@ class GuiMicroscope:
             variable=self.running_update_settings,
             command=self.init_update_settings,
             indicatoron=0,
+            font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
         update_settings_button.grid(row=0, column=0, padx=10, pady=10)
@@ -684,8 +688,9 @@ class GuiMicroscope:
         # load from file:
         load_grid_from_file_button = tk.Button(
             self.grid_frame,
-            text="Load grid from file",
+            text="Load from file",
             command=self.load_grid_from_file,
+            font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
         load_grid_from_file_button.grid(row=0, column=0, padx=10, pady=10)
@@ -752,6 +757,7 @@ class GuiMicroscope:
             self.grid_frame,
             text="Start grid preview (from A1)",
             command=self.init_grid,
+            font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
         self.start_grid_button.grid(row=7, column=0, padx=10, pady=10)
@@ -1146,6 +1152,7 @@ class GuiMicroscope:
             self.tile_frame,
             text="Start tile",
             command=self.init_tile,
+            font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
         start_tile_button.grid(row=2, column=0, padx=10, pady=10)
@@ -1319,7 +1326,7 @@ class GuiMicroscope:
 
     def init_gui_position_list(self):
         self.positions_frame = tk.LabelFrame(
-            self.root, text='POSITION LIST', bd=6)
+            self.root, text='POSITION LIST (Scout mode)', bd=6)
         self.positions_frame.grid(
             row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
         self.positions_frame.bind('<Enter>', self.get_tkfocus) # force update
@@ -1328,8 +1335,9 @@ class GuiMicroscope:
         # load from folder:
         load_from_folder_button = tk.Button(
             self.positions_frame,
-            text="Load from session folder",
+            text="Load from folder",
             command=self.load_positions_from_folder,
+            font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
         load_from_folder_button.grid(row=0, column=0, padx=10, pady=10)
@@ -1372,7 +1380,7 @@ class GuiMicroscope:
         # move back:
         self.move_back_button = tk.Button(
             self.positions_frame,
-            text="Move back",
+            text="Move back (-1)",
             command=self.move_back_one_position,
             width=button_width,
             height=button_height)
@@ -1392,7 +1400,7 @@ class GuiMicroscope:
         # go forwards:
         self.move_forward_button = tk.Button(
             self.positions_frame,
-            text="Move forward",
+            text="Move forward (+1)",
             command=self.move_forward_one_position,
             width=button_width,
             height=button_height)
@@ -1527,11 +1535,12 @@ class GuiMicroscope:
 
     def init_gui_acquire(self):
         self.acquire_frame = tk.LabelFrame(
-            self.root, text='ACQUIRE', bd=6)
+            self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
         self.acquire_frame.grid(
             row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
         self.acquire_frame.bind('<Enter>', self.get_tkfocus) # force update
         button_width, button_height = 25, 2
+        bold_width_adjust = -3
         spinbox_width = 20
         # live mode:
         self.running_live = tk.BooleanVar()
@@ -1541,6 +1550,7 @@ class GuiMicroscope:
             variable=self.running_live,
             command=self.init_live_mode,
             indicatoron=0,
+            font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
         live_mode_button.grid(row=0, column=0, padx=10, pady=10)
@@ -1552,7 +1562,8 @@ class GuiMicroscope:
             variable=self.running_scout,
             command=self.init_scout_mode,
             indicatoron=0,
-            width=button_width,
+            font=('Segoe UI', '10', 'bold', 'italic'),
+            width=button_width + bold_width_adjust,
             height=button_height)
         scout_mode_button.grid(row=1, column=0, padx=10, pady=10)
         # snap volume:
@@ -1560,7 +1571,9 @@ class GuiMicroscope:
             self.acquire_frame,
             text="Snap volume",
             command=self.snap_volume,
-            width=button_width,
+            font=('Segoe UI', '10', 'bold'),
+            fg='green',
+            width=button_width + bold_width_adjust,
             height=button_height)
         snap_volume_button.grid(row=2, column=0, padx=10, pady=10)
         # save volume and position:
@@ -1568,7 +1581,9 @@ class GuiMicroscope:
             self.acquire_frame,
             text="Save volume and position",
             command=self.save_volume_and_position,
-            width=button_width,
+            font=('Segoe UI', '10', 'bold'),
+            fg='blue',
+            width=button_width + bold_width_adjust,
             height=button_height)
         save_volume_and_position_button.grid(row=3, column=0, padx=10, pady=10)
         # run acquire:
@@ -1577,7 +1592,9 @@ class GuiMicroscope:
             self.acquire_frame,
             text="Run acquire",
             command=self.init_acquire,
-            width=button_width,
+            font=('Segoe UI', '10', 'bold'),
+            fg='red',
+            width=button_width + bold_width_adjust,
             height=button_height)
         run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
         run_acquire_button.bind('<Enter>', self.get_tkfocus)
@@ -1838,7 +1855,8 @@ class GuiMicroscope:
         return None
 
     def loop_snoutfocus(self):
-        if not self.running_acquire.get(): self.scope.snoutfocus()
+        if not self.running_acquire.get():
+            self.scope.snoutfocus(settle_vibrations=False)
         wait_ms = int(round(5 * 60 * 1e3))
         self.root.after(wait_ms, self.loop_snoutfocus)
         return None
