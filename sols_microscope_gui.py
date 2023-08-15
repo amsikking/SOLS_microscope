@@ -111,49 +111,37 @@ class GuiCamera:
             frame,
             label='illumination time (us)',
             checkbox_enabled=False,
-            slider_length=350,
-            tickinterval=9,
+            slider_enabled=False,
             min_value=100,
-            max_value=1000,
+            max_value=1000000,
             default_value=1000,
             columnspan=2,
             row=0,
-            width=5)
-        self.illumination_time_ms = tkcw.CheckboxSliderSpinbox(
-            frame,
-            label='+ illumination time (ms)',
-            checkbox_enabled=False,
-            slider_length=350,
-            tickinterval=10,
-            min_value=0,
-            max_value=1000,
-            default_value=0,
-            columnspan=2,
-            row=1,
-            width=5)
+            width=10,
+            sticky='w')
         self.height_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='height pixels',
             orient='vertical',
             checkbox_enabled=False,
-            slider_length=150,
+            slider_length=200,
             tickinterval=3,
             slider_flipped=True,
             min_value=12,
             max_value=500,
             default_value=250,
-            row=2,
+            row=1,
             width=5)
         self.width_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='width pixels',
             checkbox_enabled=False,
-            slider_length=250,
+            slider_length=240,
             tickinterval=4,
             min_value=60,
             max_value=1000,
             default_value=1000,
-            row=3,
+            row=2,
             column=1,
             sticky='s',
             width=5)
@@ -161,7 +149,7 @@ class GuiCamera:
             frame,
             self.width_px,
             self.height_px,
-            row=2,
+            row=1,
             column=1,
             fill='yellow')
 
@@ -1635,9 +1623,7 @@ class GuiMicroscope:
             channels_per_slice = ('LED',)
             power_per_channel = (self.gui_transmitted_light.power.value,)
         emission_filter = self.gui_filter_wheel.current_emission_filter.get()
-        illumination_time_us = (
-            1000 * self.gui_camera.illumination_time_ms.value
-            + self.gui_camera.illumination_time_us.value)
+        illumination_time_us = self.gui_camera.illumination_time_us.value
         height_px = self.gui_camera.height_px.value
         width_px  = self.gui_camera.width_px.value
         voxel_aspect_ratio = self.gui_galvo.voxel_aspect_ratio.value
@@ -1747,13 +1733,7 @@ class GuiMicroscope:
             channels_per_slice.append(c.split("'")[1])
             power_per_channel.append(int(powers[i]))
         emission_filter = file_settings['emission_filter']
-        total_illumination_time_us = int(file_settings['illumination_time_us'])
-        illumination_time_ms = int(total_illumination_time_us / 1000)
-        illumination_time_us = (
-            total_illumination_time_us - 1000 * illumination_time_ms)
-        if illumination_time_us == 0:
-            illumination_time_us = 1000
-            illumination_time_ms -= 1
+        illumination_time_us = int(file_settings['illumination_time_us'])
         height_px = int(file_settings['height_px'])
         width_px = int(file_settings['width_px'])
         voxel_aspect_ratio = int(round(float(
@@ -1795,8 +1775,6 @@ class GuiMicroscope:
         self.gui_filter_wheel.current_emission_filter.set(emission_filter)
         self.gui_camera.illumination_time_us.update_and_validate(
             illumination_time_us)
-        self.gui_camera.illumination_time_ms.update_and_validate(
-            illumination_time_ms)
         self.gui_camera.height_px.update_and_validate(height_px)
         self.gui_camera.width_px.update_and_validate(width_px)
         self.gui_galvo.voxel_aspect_ratio.update_and_validate(
