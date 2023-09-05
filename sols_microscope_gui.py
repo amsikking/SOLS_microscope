@@ -123,11 +123,11 @@ class GuiFilterWheel:
             'LP02-488RU',
             'LP02-561RU',
             '(unused)')
-        self.current_emission_filter = tk.StringVar()
-        self.current_emission_filter.set('ZET405/488/561/640m') # set default
+        self.emission_filter = tk.StringVar()
+        self.emission_filter.set('ZET405/488/561/640m') # set default
         option_menu = tk.OptionMenu(
             inner_frame,
-            self.current_emission_filter,
+            self.emission_filter,
             *self.emission_filter_options)
         option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)        
@@ -212,18 +212,18 @@ class GuiGalvo:
         slider_length = 365 # match to camera
         button_width, button_height = 10, 2
         # scan slider:
-        self.scan_range_um_min, self.scan_range_um_max = 1, 100
-        self.scan_range_um_center = int(round((
-        self.scan_range_um_max - self.scan_range_um_min) / 2))
+        scan_range_um_min, scan_range_um_max = 1, 100
+        scan_range_um_center = int(round((
+            scan_range_um_max - scan_range_um_min) / 2))
         self.scan_range_um = tkcw.CheckboxSliderSpinbox(
             frame,
             label='~scan range (um)',
             checkbox_enabled=False,
             slider_length=slider_length,
             tickinterval=10,
-            min_value=self.scan_range_um_min,
-            max_value=self.scan_range_um_max,
-            default_value=self.scan_range_um_center,
+            min_value=scan_range_um_min,
+            max_value=scan_range_um_max,
+            default_value=scan_range_um_center,
             row=0,
             width=5)
         scan_range_um_tip = tix.Balloon(self.scan_range_um)
@@ -239,7 +239,8 @@ class GuiGalvo:
         button_scan_range_um_min = tk.Button(
             frame,
             text="min",
-            command=self.set_scan_range_um_min,
+            command=lambda: self.scan_range_um.update_and_validate(
+                scan_range_um_min),
             width=button_width,
             height=button_height)
         button_scan_range_um_min.grid(
@@ -248,7 +249,8 @@ class GuiGalvo:
         button_scan_range_um_center = tk.Button(
             frame,
             text="center",
-            command=self.set_scan_range_um_center,
+            command=lambda: self.scan_range_um.update_and_validate(
+                scan_range_um_center),
             width=button_width,
             height=button_height)
         button_scan_range_um_center.grid(
@@ -257,24 +259,25 @@ class GuiGalvo:
         button_scan_range_um_max = tk.Button(
             frame,
             text="max",
-            command=self.set_scan_range_um_max,
+            command=lambda: self.scan_range_um.update_and_validate(
+                scan_range_um_max),
             width=button_width,
             height=button_height)
         button_scan_range_um_max.grid(
             row=1, column=0, padx=10, pady=10, sticky='e')
         # voxel slider:
-        self.voxel_aspect_ratio_min, self.voxel_aspect_ratio_max = 2, 32
-        self.voxel_aspect_ratio_center = int(round((
-            self.voxel_aspect_ratio_max - self.voxel_aspect_ratio_min) / 2))
+        voxel_aspect_ratio_min, voxel_aspect_ratio_max = 2, 32
+        voxel_aspect_ratio_center = int(round((
+            voxel_aspect_ratio_max - voxel_aspect_ratio_min) / 2))
         self.voxel_aspect_ratio = tkcw.CheckboxSliderSpinbox(
             frame,
             label='~voxel aspect ratio',
             checkbox_enabled=False,
             slider_length=slider_length,
             tickinterval=10,
-            min_value=self.voxel_aspect_ratio_min,
-            max_value=self.voxel_aspect_ratio_max,
-            default_value=self.voxel_aspect_ratio_max,
+            min_value=voxel_aspect_ratio_min,
+            max_value=voxel_aspect_ratio_max,
+            default_value=voxel_aspect_ratio_max,
             row=2,
             width=5)
         voxel_aspect_ratio_tip = tix.Balloon(self.voxel_aspect_ratio)
@@ -294,7 +297,8 @@ class GuiGalvo:
         button_voxel_aspect_ratio_min = tk.Button(
             frame,
             text="min",
-            command=self.set_voxel_aspect_ratio_min,
+            command=lambda: self.voxel_aspect_ratio.update_and_validate(
+                voxel_aspect_ratio_min),
             width=button_width,
             height=button_height)
         button_voxel_aspect_ratio_min.grid(
@@ -303,7 +307,8 @@ class GuiGalvo:
         button_voxel_aspect_ratio_center = tk.Button(
             frame,
             text="center",
-            command=self.set_voxel_aspect_ratio_center,
+            command=lambda: self.voxel_aspect_ratio.update_and_validate(
+                voxel_aspect_ratio_center),
             width=button_width,
             height=button_height)
         button_voxel_aspect_ratio_center.grid(
@@ -312,36 +317,12 @@ class GuiGalvo:
         button_voxel_aspect_ratio_max = tk.Button(
             frame,
             text="max",
-            command=self.set_voxel_aspect_ratio_max,
+            command=lambda: self.voxel_aspect_ratio.update_and_validate(
+                voxel_aspect_ratio_max),
             width=button_width,
             height=button_height)
         button_voxel_aspect_ratio_max.grid(
             row=3, column=0, padx=10, pady=10, sticky='e')
-
-    def set_scan_range_um_min(self):
-        self.scan_range_um.update_and_validate(self.scan_range_um_min)
-        return None
-
-    def set_scan_range_um_center(self):
-        self.scan_range_um.update_and_validate(self.scan_range_um_center)
-        return None
-
-    def set_scan_range_um_max(self):
-        self.scan_range_um.update_and_validate(self.scan_range_um_max)
-        return None
-
-    def set_voxel_aspect_ratio_min(self):
-        self.voxel_aspect_ratio.update_and_validate(self.voxel_aspect_ratio_min)
-        return None
-
-    def set_voxel_aspect_ratio_center(self):
-        self.voxel_aspect_ratio.update_and_validate(
-            self.voxel_aspect_ratio_center)
-        return None
-
-    def set_voxel_aspect_ratio_max(self):
-        self.voxel_aspect_ratio.update_and_validate(self.voxel_aspect_ratio_max)
-        return None
 
 class GuiFocusPiezo:
     def __init__(self, master):
@@ -355,34 +336,37 @@ class GuiFocusPiezo:
                 "precisley adjusting the focus of the primary objective \n" +
                 "over a short range.\n" +
                 "NOTE: this is only active in 'Scout mode'"))
-        self.min, self.max = 0, 100
-        self.center = int(round((self.max - self.min) / 2))
-        self.large_move, self.small_move = 5, 1
+        position_min, position_max = 0, 100
+        position_center = int(round((position_max - position_min) / 2))
+        large_move_um, small_move_um = 5, 1
         # slider:
-        self.position_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.position_um = tkcw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
             orient='vertical',
             checkbox_enabled=False,
             slider_length=460, # match to camera
             tickinterval=10,
-            min_value=self.min,
-            max_value=self.max,
+            min_value=position_min,
+            max_value=position_max,
             rowspan=5,
             width=5)
         button_width, button_height = 10, 2
-        # up buttons:
+        # large up button:
         self.button_large_move_up = tk.Button(
             frame,
-            text="up %ium"%self.large_move,
-            command=self.large_move_up,
+            text="up %ium"%large_move_um,
+            command=lambda: self.position_um.update_and_validate(
+                self.position_um.value - large_move_um),
             width=button_width,
             height=button_height)
         self.button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
+        # small up button:
         self.button_small_move_up = tk.Button(
             frame,
-            text="up %ium"%self.small_move,
-            command=self.small_move_up,
+            text="up %ium"%small_move_um,
+            command=lambda: self.position_um.update_and_validate(
+                self.position_um.value - small_move_um),
             width=button_width,
             height=button_height)
         self.button_small_move_up.grid(row=1, column=1, sticky='s')
@@ -390,49 +374,29 @@ class GuiFocusPiezo:
         self.button_center_move = tk.Button(
             frame,
             text="center",
-            command=self.move_center,
+            command=lambda: self.position_um.update_and_validate(
+                position_center),
             width=button_width,
             height=button_height)
         self.button_center_move.grid(row=2, column=1, padx=5, pady=5)
-        # down buttons:
+        # small down button:
         self.button_small_move_down = tk.Button(
             frame,
-            text="down %ium"%self.small_move,
-            command=self.small_move_down,
+            text="down %ium"%small_move_um,
+            command=lambda: self.position_um.update_and_validate(
+                self.position_um.value + small_move_um),
             width=button_width,
             height=button_height)
         self.button_small_move_down.grid(row=3, column=1, sticky='n')
+        # large down button:
         self.button_large_move_down = tk.Button(
             frame,
-            text="down %ium"%self.large_move,
-            command=self.large_move_down,
+            text="down %ium"%large_move_um,
+            command=lambda: self.position_um.update_and_validate(
+                self.position_um.value + large_move_um),
             width=button_width,
             height=button_height)
         self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
-
-    def large_move_up(self):
-        self.position_spinbox.update_and_validate(
-            self.position_spinbox.value - self.large_move)
-        return None
-
-    def small_move_up(self):
-        self.position_spinbox.update_and_validate(
-            self.position_spinbox.value - self.small_move)
-        return None
-
-    def move_center(self):
-        self.position_spinbox.update_and_validate(self.center)
-        return None
-
-    def small_move_down(self):
-        self.position_spinbox.update_and_validate(
-            self.position_spinbox.value + self.small_move)
-        return None
-
-    def large_move_down(self):
-        self.position_spinbox.update_and_validate(
-            self.position_spinbox.value + self.large_move)
-        return None
 
 class GuiXYStage:
     def __init__(self, master):
@@ -453,6 +417,47 @@ class GuiXYStage:
                 "determines how much the move buttons will move as a % \n" +
                 "of the current field of view (FOV).\n"
                 "NOTE: this is only active in 'Scout mode'"))
+        button_width, button_height = 10, 2
+        # up button:
+        self.move_up = tk.BooleanVar()
+        self.button_up = tk.Checkbutton(
+            frame,
+            text="up",
+            variable=self.move_up,
+            indicatoron=0,
+            width=button_width,
+            height=button_height)
+        self.button_up.grid(row=0, column=1, padx=10, pady=10)
+        # down button:
+        self.move_down = tk.BooleanVar()
+        self.button_down = tk.Checkbutton(
+            frame,
+            text="down",
+            variable=self.move_down,
+            indicatoron=0,
+            width=button_width,
+            height=button_height)
+        self.button_down.grid(row=2, column=1, padx=10, pady=10)
+        # left button:
+        self.move_left = tk.BooleanVar()
+        self.button_left = tk.Checkbutton(
+            frame,
+            text="left",
+            variable=self.move_left,
+            indicatoron=0,
+            width=button_width,
+            height=button_height)
+        self.button_left.grid(row=1, column=0, padx=10, pady=10)
+        # right button:
+        self.move_right = tk.BooleanVar()
+        self.button_right = tk.Checkbutton(
+            frame,
+            text="right",
+            variable=self.move_right,
+            indicatoron=0,
+            width=button_width,
+            height=button_height)
+        self.button_right.grid(row=1, column=2, padx=10, pady=10)
         # last move textbox:
         self.last_move = tkcw.Textbox(
             frame,
@@ -469,45 +474,6 @@ class GuiXYStage:
             width=20)
         self.position.grid(row=1, column=1, padx=10, pady=10)
         self.position_mm = None
-        # buttons
-        button_width, button_height = 10, 2
-        # up button:
-        padx, pady = 10, 10
-        self.button_up = tk.Button(
-            frame,
-            text="up",
-            command=self.move_up,
-            width=button_width,
-            height=button_height)
-        self.button_up.grid(row=0, column=1, padx=padx, pady=pady)
-        self.move_up = False
-        # down button:
-        self.button_down = tk.Button(
-            frame,
-            text="down",
-            command=self.move_down,
-            width=button_width,
-            height=button_height)
-        self.button_down.grid(row=2, column=1, padx=padx, pady=pady)
-        self.move_down = False
-        # left button:
-        self.button_left = tk.Button(
-            frame,
-            text="left",
-            command=self.move_left,
-            width=button_width,
-            height=button_height)
-        self.button_left.grid(row=1, column=0, padx=padx, pady=pady)
-        self.move_left = False
-        # right button:
-        self.button_right = tk.Button(
-            frame,
-            text="right",
-            command=self.move_right,
-            width=button_width,
-            height=button_height)
-        self.button_right.grid(row=1, column=2, padx=padx, pady=pady)
-        self.move_right = False
         # move size:
         self.move_pct = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -532,22 +498,6 @@ class GuiXYStage:
         self.position.textbox.insert(
             '1.0', '[%0.3f, %0.3f]'%(position_mm[0], position_mm[1]))
         self.position_mm = position_mm
-        return None
-
-    def move_up(self):
-        self.move_up = True
-        return None
-
-    def move_down(self):
-        self.move_down = True
-        return None
-
-    def move_left(self):
-        self.move_left = True
-        return None
-
-    def move_right(self):
-        self.move_right = True
         return None
 
 class GuiMicroscope:
@@ -590,7 +540,7 @@ class GuiMicroscope:
             focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
             XY_stage_position_mm = [self.scope.XY_stage.x,
                                     self.scope.XY_stage.y]
-            self.gui_focus_piezo.position_spinbox.update_and_validate(
+            self.gui_focus_piezo.position_um.update_and_validate(
                 focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.XY_joystick_active = False
@@ -2121,14 +2071,14 @@ class GuiMicroscope:
             self.gui_transmitted_light.power.checkbox_value.set(1)
             channels_per_slice = ('LED',)
             power_per_channel = (self.gui_transmitted_light.power.value,)
-        emission_filter = self.gui_filter_wheel.current_emission_filter.get()
+        emission_filter = self.gui_filter_wheel.emission_filter.get()
         illumination_time_us = self.gui_camera.illumination_time_us.value
         height_px = self.gui_camera.height_px.value
         width_px  = self.gui_camera.width_px.value
         voxel_aspect_ratio = self.gui_galvo.voxel_aspect_ratio.value
         scan_range_um = self.gui_galvo.scan_range_um.value
         volumes_per_buffer = self.volumes_spinbox.value
-        focus_piezo_z_um = self.gui_focus_piezo.position_spinbox.value
+        focus_piezo_z_um = self.gui_focus_piezo.position_um.value
         XY_stage_position_mm = self.gui_xy_stage.position_mm
         # settings:
         gui_settings = {'channels_per_slice'    :channels_per_slice,
@@ -2271,7 +2221,7 @@ class GuiMicroscope:
                 self.gui_laser_box.power640.checkbox_value.set(1)
                 self.gui_laser_box.power640.update_and_validate(
                     power_per_channel[i])
-        self.gui_filter_wheel.current_emission_filter.set(emission_filter)
+        self.gui_filter_wheel.emission_filter.set(emission_filter)
         self.gui_camera.illumination_time_us.update_and_validate(
             illumination_time_us)
         self.gui_camera.height_px.update_and_validate(height_px)
@@ -2388,7 +2338,7 @@ class GuiMicroscope:
         state = 'normal'
         if not enable: state = 'disabled'
         # focus:
-        for child in self.gui_focus_piezo.position_spinbox.winfo_children():
+        for child in self.gui_focus_piezo.position_um.winfo_children():
             child.configure(state=state)
         self.gui_focus_piezo.button_large_move_up.config(state=state)
         self.gui_focus_piezo.button_small_move_up.config(state=state)
@@ -2422,10 +2372,10 @@ class GuiMicroscope:
         def update_XY_position(): # only called if button pressed
             self.XY_button_pressed = True
             # toggle buttons back:
-            self.gui_xy_stage.move_up    = False
-            self.gui_xy_stage.move_down  = False
-            self.gui_xy_stage.move_left  = False
-            self.gui_xy_stage.move_right = False
+            self.gui_xy_stage.move_up.set(0)
+            self.gui_xy_stage.move_down.set(0)
+            self.gui_xy_stage.move_left.set(0)
+            self.gui_xy_stage.move_right.set(0)
             # current position:
             XY_stage_position_mm = self.gui_xy_stage.position_mm
             # calculate move size:
@@ -2450,16 +2400,16 @@ class GuiMicroscope:
             self.gui_xy_stage.update_position(XY_stage_position_mm)
         # run minimal code for speed:
         self.XY_button_pressed = False
-        if self.gui_xy_stage.move_up:
+        if self.gui_xy_stage.move_up.get():
             self.XY_stage_last_move = 'up (+Y)'
             update_XY_position()
-        elif self.gui_xy_stage.move_down:
+        elif self.gui_xy_stage.move_down.get():
             self.XY_stage_last_move = 'down (-Y)'
             update_XY_position()
-        elif self.gui_xy_stage.move_left:
+        elif self.gui_xy_stage.move_left.get():
             self.XY_stage_last_move = 'left (-X)'
             update_XY_position()
-        elif self.gui_xy_stage.move_right:
+        elif self.gui_xy_stage.move_right.get():
             self.XY_stage_last_move = 'right (+X)'
             update_XY_position()
         return None
@@ -2505,7 +2455,7 @@ class GuiMicroscope:
             focus_piezo_z_um = self.focus_piezo_position_list[index]
             XY_stage_position_mm = self.XY_stage_position_list[index]
             # update gui:
-            self.gui_focus_piezo.position_spinbox.update_and_validate(
+            self.gui_focus_piezo.position_um.update_and_validate(
                 focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.current_position_spinbox.update_and_validate(new_position)
@@ -2528,7 +2478,7 @@ class GuiMicroscope:
                 self.last_acquire_task.join() # don't accumulate acquires
                 self.last_acquire_task = self.scope.acquire()
             # Check Z:
-            focus_piezo_z_um = self.gui_focus_piezo.position_spinbox.value
+            focus_piezo_z_um = self.gui_focus_piezo.position_um.value
             if self.applied_settings['focus_piezo_z_um'] != focus_piezo_z_um:
                 snap()
             # Check XY buttons:
@@ -2577,7 +2527,7 @@ class GuiMicroscope:
         if self.loop_over_position_list.get():
             if self.current_position == 0:
                 self.loop_t0_s = time.perf_counter()
-            self.gui_focus_piezo.position_spinbox.update_and_validate(
+            self.gui_focus_piezo.position_um.update_and_validate(
                 self.focus_piezo_position_list[self.current_position])
             self.gui_xy_stage.update_position(
                 self.XY_stage_position_list[self.current_position])
