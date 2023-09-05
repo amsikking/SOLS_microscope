@@ -545,11 +545,6 @@ class GuiMicroscope:
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.XY_joystick_active = False
             self.XY_stage_last_move = 'None'
-            # get XY stage limits for feedback in scout mode:
-            self.XY_stage_x_min = self.scope.XY_stage.x_min
-            self.XY_stage_y_min = self.scope.XY_stage.y_min
-            self.XY_stage_x_max = self.scope.XY_stage.x_max
-            self.XY_stage_y_max = self.scope.XY_stage.y_max
             # init settings attributes:
             self.applied_settings = {}
             for k in gui_settings.keys():
@@ -1698,10 +1693,12 @@ class GuiMicroscope:
                 "the GUI and the associated .txt files in the\n" +
                 "'sols_gui_session' folder."))
         # move to start:
-        self.move_to_start_button = tk.Button(
+        self.move_to_start = tk.BooleanVar()
+        self.move_to_start_button = tk.Checkbutton(
             self.positions_frame,
             text="Move to start",
-            command=self.move_to_start_position,
+            variable=self.move_to_start,
+            indicatoron=0,
             width=button_width,
             height=button_height)
         self.move_to_start_button.grid(row=4, column=0, padx=10, pady=10)
@@ -1714,10 +1711,12 @@ class GuiMicroscope:
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the start of the position list."))
         # move back:
-        self.move_back_button = tk.Button(
+        self.move_back = tk.BooleanVar()
+        self.move_back_button = tk.Checkbutton(
             self.positions_frame,
             text="Move back (-1)",
-            command=self.move_back_one_position,
+            variable=self.move_back,
+            indicatoron=0,
             width=button_width,
             height=button_height)
         self.move_back_button.grid(row=5, column=0, padx=10, pady=10)
@@ -1755,10 +1754,12 @@ class GuiMicroscope:
                 "the joystick or 'XY STAGE' panel). Use one of the 'move' \n" +
                 "buttons to update if needed."))
         # go forwards:
-        self.move_forward_button = tk.Button(
+        self.move_forward = tk.BooleanVar()
+        self.move_forward_button = tk.Checkbutton(
             self.positions_frame,
             text="Move forward (+1)",
-            command=self.move_forward_one_position,
+            variable=self.move_forward,
+            indicatoron=0,
             width=button_width,
             height=button_height)
         self.move_forward_button.grid(row=7, column=0, padx=10, pady=10)
@@ -1772,10 +1773,12 @@ class GuiMicroscope:
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the end of the position list."))
         # move to end:
-        self.move_to_end_button = tk.Button(
+        self.move_to_end = tk.BooleanVar()
+        self.move_to_end_button = tk.Checkbutton(
             self.positions_frame,
             text="Move to end",
-            command=self.move_to_end_position,
+            variable=self.move_to_end,
+            indicatoron=0,
             width=button_width,
             height=button_height)
         self.move_to_end_button.grid(row=8, column=0, padx=10, pady=10)
@@ -1787,11 +1790,6 @@ class GuiMicroscope:
                 "and 'XY STAGE' to the last position in the position list.\n" +
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the end of the position list."))        
-        # set defaults:
-        self.move_to_start_position_now     = False
-        self.move_back_one_position_now     = False
-        self.move_forward_one_position_now  = False
-        self.move_to_end_position_now       = False 
         return None
 
     def make_empty_position_list(self):
@@ -1894,18 +1892,6 @@ class GuiMicroscope:
                   "XY_stage_position_list.txt", "a") as file:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
-
-    def move_to_start_position(self):
-        self.move_to_start_position_now = True
-        
-    def move_back_one_position(self):
-        self.move_back_one_position_now = True
-        
-    def move_forward_one_position(self):
-        self.move_forward_one_position_now = True
-
-    def move_to_end_position(self):
-        self.move_to_end_position_now = True
 
     def init_gui_acquire(self):
         self.acquire_frame = tk.LabelFrame(
@@ -2099,16 +2085,16 @@ class GuiMicroscope:
         self.scope.apply_settings().join() # update attributes
         XY_stage_position_mm = list(self.scope.XY_stage_position_mm)
         self.XY_joystick_active = False
-        if   XY_stage_position_mm[0] == self.XY_stage_x_min: # moving
+        if   XY_stage_position_mm[0] == self.scope.XY_stage.x_min: # moving
             self.XY_joystick_active = True
             self.XY_stage_last_move = 'left (-X)'
-        elif XY_stage_position_mm[0] == self.XY_stage_x_max: # moving
+        elif XY_stage_position_mm[0] == self.scope.XY_stage.x_max: # moving
             self.XY_joystick_active = True
             self.XY_stage_last_move = 'right (+X)'
-        elif XY_stage_position_mm[1] == self.XY_stage_y_min: # moving
+        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_min: # moving
             self.XY_joystick_active = True
             self.XY_stage_last_move = 'down (-Y)'
-        elif XY_stage_position_mm[1] == self.XY_stage_y_max: # moving
+        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_max: # moving
             self.XY_joystick_active = True
             self.XY_stage_last_move = 'up (+Y)'
         return XY_stage_position_mm
@@ -2371,11 +2357,6 @@ class GuiMicroscope:
     def check_XY_buttons(self):
         def update_XY_position(): # only called if button pressed
             self.XY_button_pressed = True
-            # toggle buttons back:
-            self.gui_xy_stage.move_up.set(0)
-            self.gui_xy_stage.move_down.set(0)
-            self.gui_xy_stage.move_left.set(0)
-            self.gui_xy_stage.move_right.set(0)
             # current position:
             XY_stage_position_mm = self.gui_xy_stage.position_mm
             # calculate move size:
@@ -2398,6 +2379,11 @@ class GuiMicroscope:
             XY_stage_position_mm = tuple(map(sum, zip(
                 XY_stage_position_mm, move_mm)))
             self.gui_xy_stage.update_position(XY_stage_position_mm)
+            # toggle buttons back:
+            self.gui_xy_stage.move_up.set(0)
+            self.gui_xy_stage.move_down.set(0)
+            self.gui_xy_stage.move_left.set(0)
+            self.gui_xy_stage.move_right.set(0)
         # run minimal code for speed:
         self.XY_button_pressed = False
         if self.gui_xy_stage.move_up.get():
@@ -2416,11 +2402,6 @@ class GuiMicroscope:
 
     def check_position_buttons(self):
         def update_position(go_to): # only called if button pressed
-            # toggle buttons back:
-            self.move_to_start_position_now     = False
-            self.move_back_one_position_now     = False
-            self.move_forward_one_position_now  = False
-            self.move_to_end_position_now       = False            
             # check total and current position:
             total_positions  = self.total_positions_spinbox.value
             current_position = self.current_position_spinbox.value
@@ -2459,15 +2440,20 @@ class GuiMicroscope:
                 focus_piezo_z_um)
             self.gui_xy_stage.update_position(XY_stage_position_mm)
             self.current_position_spinbox.update_and_validate(new_position)
+            # toggle buttons back:
+            self.move_to_start.set(0)
+            self.move_back.set(0)
+            self.move_forward.set(0)
+            self.move_to_end.set(0)
         # run minimal code for speed:
         self.position_button_pressed = False
-        if self.move_to_start_position_now:
+        if self.move_to_start.get():
             update_position('start')
-        elif self.move_back_one_position_now:
+        elif self.move_back.get():
             update_position('back')
-        elif self.move_forward_one_position_now:
+        elif self.move_forward.get():
             update_position('forward')
-        elif self.move_to_end_position_now:
+        elif self.move_to_end.get():
             update_position('end')
         return None
 
