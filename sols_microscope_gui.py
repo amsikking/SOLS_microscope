@@ -588,7 +588,8 @@ class GuiMicroscope:
             self.root, text='SETTINGS (misc)', bd=6)
         self.settings_frame.grid(
             row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.settings_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.settings_frame.bind( # force update
+            '<Enter>', lambda event: self.settings_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -745,7 +746,8 @@ class GuiMicroscope:
             self.root, text='SETTINGS OUTPUT', bd=6)
         self.output_frame.grid(
             row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.output_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.output_frame.bind( # force update
+            '<Enter>', lambda event: self.output_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # auto update settings button:
@@ -851,7 +853,8 @@ class GuiMicroscope:
             self.root, text='GRID NAVIGATOR', bd=6)
         self.grid_frame.grid(
             row=1, column=4, rowspan=2, padx=10, pady=10, sticky='n')
-        self.grid_frame.bind('<Enter>', self.get_tkfocus) # force update       
+        self.grid_frame.bind( # force update
+            '<Enter>', lambda event: self.grid_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -1100,9 +1103,8 @@ class GuiMicroscope:
             command=self.generate_grid,
             height=button_height, width=button_width)
         generate_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
-        def get_focus(event):
-            self.generate_grid_popup.focus_set()
-        generate_button.bind('<Enter>', get_focus) # force update
+        generate_button.bind( # force update
+            '<Enter>', lambda event: self.generate_grid_popup.focus_set())
         exit_button = tk.Button(
             self.generate_grid_popup, text="Exit",
             command=self.generate_grid_popup.destroy,
@@ -1372,7 +1374,8 @@ class GuiMicroscope:
             self.root, text='TILE NAVIGATOR', bd=6)
         self.tile_frame.grid(
             row=3, column=4, rowspan=2, padx=10, pady=10, sticky='n')
-        self.grid_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.grid_frame.bind( # force update
+            '<Enter>', lambda event: self.grid_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # tile array width:
@@ -1617,7 +1620,8 @@ class GuiMicroscope:
             self.root, text='POSITION LIST (Scout mode)', bd=6)
         self.positions_frame.grid(
             row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
-        self.positions_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.positions_frame.bind( # force update
+            '<Enter>', lambda event: self.positions_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from folder:
@@ -1898,7 +1902,8 @@ class GuiMicroscope:
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
         self.acquire_frame.grid(
             row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
-        self.acquire_frame.bind('<Enter>', self.get_tkfocus) # force update
+        self.acquire_frame.bind( # force update
+            '<Enter>', lambda event: self.acquire_frame.focus_set())
         button_width, button_height = 25, 2
         bold_width_adjust = -3
         spinbox_width = 20
@@ -1996,7 +2001,6 @@ class GuiMicroscope:
             width=button_width + bold_width_adjust,
             height=button_height)
         run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
-        run_acquire_button.bind('<Enter>', self.get_tkfocus)
         run_acquire_button_tip = tix.Balloon(run_acquire_button)
         run_acquire_button_tip.bind_widget(
             run_acquire_button,
@@ -2029,10 +2033,6 @@ class GuiMicroscope:
                 "acquisition.\n" +
                 "NOTE: this is not immediate since some processes must \n" +
                 "finish once launched."))
-        return None
-
-    def get_tkfocus(self, event):   # event is not used here (.bind)
-        self.acquire_frame.focus_set() # take from widgets to force update
         return None
 
     def get_gui_settings(self):
