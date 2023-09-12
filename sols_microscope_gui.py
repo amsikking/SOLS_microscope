@@ -1247,7 +1247,7 @@ class GuiMicroscope:
                     initial_XY_stage_position_mm[1] + r * Y_move_mm]
                 self.XY_tile_position_list.append(XY_stage_position_mm)
         self.current_tile = 0
-        def run_tile_preview():           
+        def run_tile_preview():
             # update position:
             r, c = self.XY_tile_rc_list[self.current_tile]
             self.gui_xy_stage.update_position(
@@ -1315,46 +1315,47 @@ class GuiMicroscope:
             height=button_height, width=button_width)
         cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
         # make buttons:
-        self.tile_buttons_frame = tk.LabelFrame(
+        tile_buttons_frame = tk.LabelFrame(
             move_to_tile_popup, text='XY TILES', bd=6)
-        self.tile_buttons_frame.grid(
+        tile_buttons_frame.grid(
             row=0, column=1, rowspan=5, padx=10, pady=10)
         button_width, button_height = 5, 2
-        self.tile_button_array = [
+        tile_button_array = [
             [None for c in range(self.tile_cols)] for r in range(
                 self.tile_rows)]
-        self.tile_button_enabled_array = [
+        tile_button_enabled_array = [
             [None for c in range(self.tile_cols)] for r in range(
                 self.tile_rows)]
         for r in range(self.tile_rows):
             for c in range(self.tile_cols):
-                self.tile_button_enabled_array[r][c] = tk.BooleanVar()
-                self.tile_button_array[r][c] = tk.Checkbutton(
-                    self.tile_buttons_frame,
+                tile_button_enabled_array[r][c] = tk.BooleanVar()
+                tile_button_array[r][c] = tk.Checkbutton(
+                    tile_buttons_frame,
                     text='r%ic%i'%(r, c),
-                    variable=self.tile_button_enabled_array[r][c],
+                    variable=tile_button_enabled_array[r][c],
                     indicatoron=0,
                     width=button_width,
                     height=button_height)
-                self.tile_button_array[r][c].grid(
+                tile_button_array[r][c].grid(
                     row=r, column=c, padx=10, pady=10)
         # set state:
         r, c = self.XY_tile_rc_list[self.current_tile]
-        self.tile_button_enabled_array[r][c].set(1)
-        self.tile_button_array[r][c].config(state='disabled')
+        tile_button_enabled_array[r][c].set(1)
+        tile_button_array[r][c].config(state='disabled')
         self.set_running_mode('move_to_tile', enable=True)
         def run_move_to_tile():
             if self.running_move_to_tile.get():
                 for r in range(self.tile_rows):
                     for c in range(self.tile_cols):
-                        if (self.tile_button_enabled_array[r][c].get() and
+                        if (tile_button_enabled_array[r][c].get() and
                             [r, c] != self.XY_tile_rc_list[self.current_tile]):
-                            self.current_tile = self.XY_tile_rc_list.index([r, c])
+                            self.current_tile = self.XY_tile_rc_list.index(
+                                [r, c])
                             self.gui_xy_stage.update_position(
                                 self.XY_tile_position_list[self.current_tile])
                             self.apply_settings(
                                 single_volume=True, check_XY_stage=False)
-                            self.last_acquire_task.join()# don't accumulate acquires
+                            self.last_acquire_task.join()# don't accumulate
                             self.last_acquire_task = self.scope.acquire()
                             cancel()
                             return None
