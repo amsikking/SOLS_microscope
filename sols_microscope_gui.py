@@ -927,6 +927,10 @@ class GuiMicroscope:
                 for r in range(self.grid_rows):
                     for c in range(self.grid_cols):
                         if self.grid_button_enabled_array[r][c].get():
+                            # stop .after immediately:
+                            self.running_set_grid_location.set(0)
+                            set_grid_location_popup.destroy()
+                            # update grid:
                             self.grid_location_rc = [r, c]
                             self.update_grid_location()
                             # get current position and spacing:
@@ -947,14 +951,11 @@ class GuiMicroscope:
                             # allow moves:
                             self.move_to_grid_location_button.config(
                                 state='normal')
+                            self.start_grid_preview_button.config(
+                                    state='disabled')
                             if self.grid_location_rc == [0, 0]:
                                 self.start_grid_preview_button.config(
                                     state='normal')
-                            else:
-                                self.start_grid_preview_button.config(
-                                    state='disabled')
-                            self.running_set_grid_location.set(0)
-                            set_grid_location_popup.destroy()
                             return None
                 self.root.after(self.gui_delay_ms, run_set_grid_location)
             return None
@@ -996,6 +997,7 @@ class GuiMicroscope:
                     for c in range(self.grid_cols):
                         if (self.grid_button_enabled_array[r][c].get() and
                             [r, c] != self.grid_location_rc):
+                            cancel() # stop .after immediately
                             # update gui, apply and display:
                             XY_stage_position_mm = self.grid_positions_mm[r][c]
                             self.gui_xy_stage.update_position(
@@ -1012,7 +1014,6 @@ class GuiMicroscope:
                             if [r, c] == [0, 0]:
                                 self.start_grid_preview_button.config(
                                     state='normal')
-                            cancel()
                             return None
                 self.root.after(self.gui_delay_ms, run_move_to_grid_location)
             return None
@@ -1349,6 +1350,7 @@ class GuiMicroscope:
                     for c in range(self.tile_cols):
                         if (tile_button_enabled_array[r][c].get() and
                             [r, c] != self.XY_tile_rc_list[self.current_tile]):
+                            cancel() # stop .after immediately:
                             self.current_tile = self.XY_tile_rc_list.index(
                                 [r, c])
                             self.gui_xy_stage.update_position(
@@ -1357,7 +1359,6 @@ class GuiMicroscope:
                                 single_volume=True, check_XY_stage=False)
                             self.last_acquire_task.join()# don't accumulate
                             self.last_acquire_task = self.scope.acquire()
-                            cancel()
                             return None
                 self.root.after(self.gui_delay_ms, run_move_to_tile)
             return None
