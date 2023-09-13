@@ -1375,10 +1375,78 @@ class GuiMicroscope:
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
+        def load_settings_from_file():
+            # get file from user:
+            file_path = tk.filedialog.askopenfilename(
+                parent=self.root,
+                initialdir=os.getcwd(),
+                title='Please choose a previous "metadata" file (.txt)')        
+            with open(file_path, 'r') as file:
+                metadata = file.read().splitlines()
+            # format into settings and values:
+            file_settings = {}
+            for data in metadata:
+                file_settings[data.split(':')[0]] = (
+                    data.split(':')[1:][0].lstrip())
+            # re-format strings from file settings for gui:
+            channels = file_settings[
+                'channels_per_slice'].strip('(').strip(')').split(',')
+            powers   = file_settings[
+                'power_per_channel'].strip('(').strip(')').split(',')
+            channels_per_slice, power_per_channel = [], []
+            for i, c in enumerate(channels):
+                if c == '': break # avoid bug from tuple with single entry
+                channels_per_slice.append(c.split("'")[1])
+                power_per_channel.append(int(powers[i]))
+            # turn off all illumination:
+            self.gui_transmitted_light.power.checkbox_value.set(0)
+            self.gui_laser_box.power405.checkbox_value.set(0)
+            self.gui_laser_box.power488.checkbox_value.set(0)
+            self.gui_laser_box.power561.checkbox_value.set(0)
+            self.gui_laser_box.power640.checkbox_value.set(0)
+            # apply file settings to gui:
+            for i, channel in enumerate(channels_per_slice):
+                if channel == 'LED':
+                    self.gui_transmitted_light.power.checkbox_value.set(1)
+                    self.gui_transmitted_light.power.update_and_validate(
+                        power_per_channel[i])
+                if channel == '405':
+                    self.gui_laser_box.power405.checkbox_value.set(1)
+                    self.gui_laser_box.power405.update_and_validate(
+                        power_per_channel[i])
+                if channel == '488':
+                    self.gui_laser_box.power488.checkbox_value.set(1)
+                    self.gui_laser_box.power488.update_and_validate(
+                        power_per_channel[i])
+                if channel == '561':
+                    self.gui_laser_box.power561.checkbox_value.set(1)
+                    self.gui_laser_box.power561.update_and_validate(
+                        power_per_channel[i])
+                if channel == '640':
+                    self.gui_laser_box.power640.checkbox_value.set(1)
+                    self.gui_laser_box.power640.update_and_validate(
+                        power_per_channel[i])
+            self.gui_filter_wheel.emission_filter.set(
+                file_settings['emission_filter'])
+            self.gui_camera.illumination_time_us.update_and_validate(
+                int(file_settings['illumination_time_us']))
+            self.gui_camera.height_px.update_and_validate(
+                int(file_settings['height_px']))
+            self.gui_camera.width_px.update_and_validate(
+                int(file_settings['width_px']))
+            self.gui_galvo.voxel_aspect_ratio.update_and_validate(
+                int(round(float(file_settings['voxel_aspect_ratio']))))
+            self.gui_galvo.scan_range_um.update_and_validate(
+                int(round(float(file_settings['scan_range_um']))))
+            self.volumes_spinbox.update_and_validate(
+                int(file_settings['volumes_per_buffer']))
+            # apply the file settings:
+            self.apply_settings(check_XY_stage=False)
+            return None        
         load_from_file_button = tk.Button(
             self.settings_frame,
             text="Load from file",
-            command=self.load_settings_from_file,
+            command=load_settings_from_file,
             font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
@@ -1523,81 +1591,6 @@ class GuiMicroscope:
                 "run as fast as it can."))        
         return None
 
-    def load_settings_from_file(self):
-        # get file from user:
-        file_path = tk.filedialog.askopenfilename(
-            parent=self.root,
-            initialdir=os.getcwd(),
-            title='Please choose a previous "metadata" file (.txt)')        
-        with open(file_path, 'r') as file:
-            metadata = file.read().splitlines()
-        # format into settings and values:
-        file_settings = {}
-        for data in metadata:
-            file_settings[data.split(':')[0]] = data.split(':')[1:][0].lstrip()
-        # re-format strings from file settings for gui:
-        channels = file_settings[
-            'channels_per_slice'].strip('(').strip(')').split(',')
-        powers   = file_settings[
-            'power_per_channel'].strip('(').strip(')').split(',')
-        channels_per_slice, power_per_channel = [], []
-        for i, c in enumerate(channels):
-            if c == '': break # avoid bug from tuple with single entry
-            channels_per_slice.append(c.split("'")[1])
-            power_per_channel.append(int(powers[i]))
-        emission_filter = file_settings['emission_filter']
-        illumination_time_us = int(file_settings['illumination_time_us'])
-        height_px = int(file_settings['height_px'])
-        width_px = int(file_settings['width_px'])
-        voxel_aspect_ratio = int(round(float(
-            file_settings['voxel_aspect_ratio'])))
-        scan_range_um = int(round(float(file_settings['scan_range_um'])))        
-        volumes_per_buffer = int(file_settings['volumes_per_buffer'])
-        focus_piezo_z_um = float(file_settings['focus_piezo_z_um'])
-        XY_mm = file_settings['XY_stage_position_mm'].strip(
-            '(').strip(')').split(',')
-        XY_stage_position_mm = [float(XY_mm[0]), float(XY_mm[1])]
-        # turn off all illumination:
-        self.gui_transmitted_light.power.checkbox_value.set(0)
-        self.gui_laser_box.power405.checkbox_value.set(0)
-        self.gui_laser_box.power488.checkbox_value.set(0)
-        self.gui_laser_box.power561.checkbox_value.set(0)
-        self.gui_laser_box.power640.checkbox_value.set(0)
-        # apply file settings to gui:
-        for i, channel in enumerate(channels_per_slice):
-            if channel == 'LED':
-                self.gui_transmitted_light.power.checkbox_value.set(1)
-                self.gui_transmitted_light.power.update_and_validate(
-                    power_per_channel[i])
-            if channel == '405':
-                self.gui_laser_box.power405.checkbox_value.set(1)
-                self.gui_laser_box.power405.update_and_validate(
-                    power_per_channel[i])
-            if channel == '488':
-                self.gui_laser_box.power488.checkbox_value.set(1)
-                self.gui_laser_box.power488.update_and_validate(
-                    power_per_channel[i])
-            if channel == '561':
-                self.gui_laser_box.power561.checkbox_value.set(1)
-                self.gui_laser_box.power561.update_and_validate(
-                    power_per_channel[i])
-            if channel == '640':
-                self.gui_laser_box.power640.checkbox_value.set(1)
-                self.gui_laser_box.power640.update_and_validate(
-                    power_per_channel[i])
-        self.gui_filter_wheel.emission_filter.set(emission_filter)
-        self.gui_camera.illumination_time_us.update_and_validate(
-            illumination_time_us)
-        self.gui_camera.height_px.update_and_validate(height_px)
-        self.gui_camera.width_px.update_and_validate(width_px)
-        self.gui_galvo.voxel_aspect_ratio.update_and_validate(
-            voxel_aspect_ratio)
-        self.gui_galvo.scan_range_um.update_and_validate(scan_range_um)
-        self.volumes_spinbox.update_and_validate(volumes_per_buffer)
-        # apply the file settings:
-        self.apply_settings(check_XY_stage=False)
-        return None
-
     def get_gui_settings(self):
         # collect settings from gui and re-format for '.scope.apply_settings'
         channels_per_slice, power_per_channel = [], []
@@ -1620,27 +1613,19 @@ class GuiMicroscope:
             self.gui_transmitted_light.power.checkbox_value.set(1)
             channels_per_slice = ('LED',)
             power_per_channel = (self.gui_transmitted_light.power.value,)
-        emission_filter = self.gui_filter_wheel.emission_filter.get()
-        illumination_time_us = self.gui_camera.illumination_time_us.value
-        height_px = self.gui_camera.height_px.value
-        width_px  = self.gui_camera.width_px.value
-        voxel_aspect_ratio = self.gui_galvo.voxel_aspect_ratio.value
-        scan_range_um = self.gui_galvo.scan_range_um.value
-        volumes_per_buffer = self.volumes_spinbox.value
-        focus_piezo_z_um = self.gui_focus_piezo.position_um.value
-        XY_stage_position_mm = self.gui_xy_stage.position_mm
         # settings:
-        gui_settings = {'channels_per_slice'    :channels_per_slice,
-                        'power_per_channel'     :power_per_channel,
-                        'emission_filter'       :emission_filter,
-                        'illumination_time_us'  :illumination_time_us,
-                        'height_px'             :height_px,
-                        'width_px'              :width_px,
-                        'voxel_aspect_ratio'    :voxel_aspect_ratio,
-                        'scan_range_um'         :scan_range_um,
-                        'volumes_per_buffer'    :volumes_per_buffer,
-                        'focus_piezo_z_um'      :focus_piezo_z_um,
-                        'XY_stage_position_mm'  :XY_stage_position_mm}
+        gui_settings = {
+            'channels_per_slice'  :channels_per_slice,
+            'power_per_channel'   :power_per_channel,
+            'emission_filter'     :self.gui_filter_wheel.emission_filter.get(),
+            'illumination_time_us':self.gui_camera.illumination_time_us.value,
+            'height_px'           :self.gui_camera.height_px.value,
+            'width_px'            :self.gui_camera.width_px.value,
+            'voxel_aspect_ratio'  :self.gui_galvo.voxel_aspect_ratio.value,
+            'scan_range_um'       :self.gui_galvo.scan_range_um.value,
+            'volumes_per_buffer'  :self.volumes_spinbox.value,
+            'focus_piezo_z_um'    :self.gui_focus_piezo.position_um.value,
+            'XY_stage_position_mm':self.gui_xy_stage.position_mm}
         return gui_settings
 
     def check_XY_stage(self):
