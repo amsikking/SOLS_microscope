@@ -525,7 +525,7 @@ class GuiMicroscope:
         self.gui_tile_navigator()  # generates and navigates XY tiles
         self.gui_settings()        # collects settings from GUI
         self.gui_settings_output() # shows output from settings
-        self.init_gui_position_list()   # navigates position lists
+        self.gui_position_list()   # navigates position lists
         self.init_gui_acquire()         # microscope methods
         self.init_quit_button()
         # grey out XYZ navigation buttons if not in scout mode:
@@ -550,11 +550,10 @@ class GuiMicroscope:
             for k in gui_settings.keys():
                 self.applied_settings[k] = None
             self.apply_settings(check_XY_stage=False) # mandatory call
-            # make session folder and position lists:
+            # make session folder:
             dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
             self.session_folder = dt + 'sols_gui_session\\'
             os.makedirs(self.session_folder)
-            self.make_empty_position_list()
             # get scope ready:
             self.loop_snoutfocus()
             self.last_acquire_task = self.scope.acquire() # snap a volume
@@ -1749,109 +1748,7 @@ class GuiMicroscope:
         self.min_time_textbox.textbox.insert('1.0', text)
         return None
 
-    def get_gui_settings(self):
-        # collect settings from gui and re-format for '.scope.apply_settings'
-        channels_per_slice, power_per_channel = [], []
-        if self.gui_transmitted_light.power.checkbox_value.get():
-            channels_per_slice.append('LED')
-            power_per_channel.append(self.gui_transmitted_light.power.value)
-        if self.gui_laser_box.power405.checkbox_value.get():
-            channels_per_slice.append('405')
-            power_per_channel.append(self.gui_laser_box.power405.value)
-        if self.gui_laser_box.power488.checkbox_value.get():
-            channels_per_slice.append('488')
-            power_per_channel.append(self.gui_laser_box.power488.value)
-        if self.gui_laser_box.power561.checkbox_value.get():
-            channels_per_slice.append('561')
-            power_per_channel.append(self.gui_laser_box.power561.value)
-        if self.gui_laser_box.power640.checkbox_value.get():
-            channels_per_slice.append('640')
-            power_per_channel.append(self.gui_laser_box.power640.value)
-        if len(channels_per_slice) == 0: # default TL if nothing selected
-            self.gui_transmitted_light.power.checkbox_value.set(1)
-            channels_per_slice = ('LED',)
-            power_per_channel = (self.gui_transmitted_light.power.value,)
-        # settings:
-        gui_settings = {
-            'channels_per_slice'  :channels_per_slice,
-            'power_per_channel'   :power_per_channel,
-            'emission_filter'     :self.gui_filter_wheel.emission_filter.get(),
-            'illumination_time_us':self.gui_camera.illumination_time_us.value,
-            'height_px'           :self.gui_camera.height_px.value,
-            'width_px'            :self.gui_camera.width_px.value,
-            'voxel_aspect_ratio'  :self.gui_galvo.voxel_aspect_ratio.value,
-            'scan_range_um'       :self.gui_galvo.scan_range_um.value,
-            'volumes_per_buffer'  :self.volumes_spinbox.value,
-            'focus_piezo_z_um'    :self.gui_focus_piezo.position_um.value,
-            'XY_stage_position_mm':self.gui_xy_stage.position_mm}
-        return gui_settings
-
-    def check_XY_stage(self):
-        # has the position changed? is the joystick being used? 
-        self.scope.apply_settings().join() # update attributes
-        XY_stage_position_mm = list(self.scope.XY_stage_position_mm)
-        self.XY_joystick_active = False
-        if   XY_stage_position_mm[0] == self.scope.XY_stage.x_min: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'left (-X)'
-        elif XY_stage_position_mm[0] == self.scope.XY_stage.x_max: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'right (+X)'
-        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_min: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'down (-Y)'
-        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_max: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'up (+Y)'
-        return XY_stage_position_mm
-
-    def apply_settings(self, single_volume=False, check_XY_stage=True):
-        if check_XY_stage: # joystick used? If so update the gui:
-            XY_stage_position_mm = self.check_XY_stage()
-            if XY_stage_position_mm != self.gui_xy_stage.position_mm:
-                self.gui_xy_stage.update_position(XY_stage_position_mm)
-        gui_settings = self.get_gui_settings()
-        new_settings = len(gui_settings)*[None] # pass 'None' if no change
-        # check gui settings against applied settings:
-        if (self.applied_settings[
-            'channels_per_slice'] != gui_settings['channels_per_slice'] or
-            self.applied_settings[
-                'power_per_channel']  != gui_settings['power_per_channel']):
-            new_settings[0] = gui_settings['channels_per_slice']
-            new_settings[1] = gui_settings['power_per_channel']
-        for i, k in enumerate(list(self.applied_settings.keys())[2:-2]): #-2 XYZ
-            if self.applied_settings[k] != gui_settings[k]:
-                new_settings[i + 2] = gui_settings[k] # + 2 started at setting 2
-        if self.applied_settings[
-            'focus_piezo_z_um'] != gui_settings['focus_piezo_z_um']:
-            new_settings[9] = (gui_settings['focus_piezo_z_um'], 'absolute')
-        if not self.XY_joystick_active:
-            if self.applied_settings[
-                'XY_stage_position_mm'] != gui_settings['XY_stage_position_mm']:
-                new_settings[10] = (gui_settings['XY_stage_position_mm'][0],
-                                    gui_settings['XY_stage_position_mm'][1],
-                                    'absolute')
-        # apply settings:
-        if single_volume: new_settings[8] = 1
-        self.scope.apply_settings(
-            channels_per_slice      = new_settings[0],
-            power_per_channel       = new_settings[1],
-            emission_filter         = new_settings[2],
-            illumination_time_us    = new_settings[3],
-            height_px               = new_settings[4],
-            width_px                = new_settings[5],
-            voxel_aspect_ratio      = new_settings[6],
-            scan_range_um           = new_settings[7],
-            volumes_per_buffer      = new_settings[8],
-            focus_piezo_z_um        = new_settings[9],
-            XY_stage_position_mm    = new_settings[10])
-        # update settings attributes:
-        for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
-            self.applied_settings[k] = copy.deepcopy(gui_settings[k])
-        if single_volume: self.applied_settings['volumes_per_buffer'] = 1
-        return None
-
-    def init_gui_position_list(self):
+    def gui_position_list(self):
         self.positions_frame = tk.LabelFrame(
             self.root, text='POSITION LIST (Scout mode)', bd=6)
         self.positions_frame.grid(
@@ -1860,11 +1757,64 @@ class GuiMicroscope:
             '<Enter>', lambda event: self.positions_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
+        # set list defaults:
+        self.focus_piezo_position_list = []
+        self.XY_stage_position_list = []
+        def make_empty_position_list():
+            self.focus_piezo_position_list = []
+            self.XY_stage_position_list = []
+            with open(self.session_folder +
+                      "focus_piezo_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
+            with open(self.session_folder +
+                  "XY_stage_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
+            return None
         # load from folder:
+        def load_positions_from_folder():
+            # get folder from user:
+            folder_path = tk.filedialog.askdirectory(
+                parent=self.root,
+                initialdir=os.getcwd(),
+                title='Please choose a previous "gui session" folder')
+            # read files, parse into lists and update attributes:
+            focus_piezo_file_path = (
+                folder_path + '\\focus_piezo_position_list.txt')
+            XY_stage_file_path = (
+                folder_path + '\\XY_stage_position_list.txt')
+            with open(focus_piezo_file_path, 'r') as file:
+                focus_piezo_position_list = (
+                    file.read().splitlines()[1:]) # skip 1st
+            with open(XY_stage_file_path, 'r') as file:
+                XY_stage_position_list = (
+                    file.read().splitlines()[1:]) # skip 1st
+            for i, element in enumerate(focus_piezo_position_list):
+                focus_piezo_z_um = int(element.strip(','))
+                focus_piezo_position_list[i] = focus_piezo_z_um
+                self.focus_piezo_position_list.append(focus_piezo_z_um)
+            for i, element in enumerate(XY_stage_position_list):
+                XY_stage_position_mm = [
+                    float(element.strip('[').strip(']').split(',')[0]),
+                    float(element.strip('[').split(',')[1].strip(']').lstrip())]
+                XY_stage_position_list[i] = XY_stage_position_mm
+                self.XY_stage_position_list.append(XY_stage_position_mm)
+            # append positions to files:
+            with open(self.session_folder +
+                      "focus_piezo_position_list.txt", "a") as file:
+                for i in range(len(focus_piezo_position_list)):
+                    file.write(str(focus_piezo_position_list[i]) + ',\n')
+            with open(self.session_folder +
+                      "XY_stage_position_list.txt", "a") as file:
+                for i in range(len(XY_stage_position_list)):
+                    file.write(str(XY_stage_position_list[i]) + ',\n')
+            # update gui:
+            total_positions = len(self.focus_piezo_position_list)
+            self.total_positions_spinbox.update_and_validate(total_positions)
+            return None
         load_from_folder_button = tk.Button(
             self.positions_frame,
             text="Load from folder",
-            command=self.load_positions_from_folder,
+            command=load_positions_from_folder,
             font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
@@ -1878,10 +1828,15 @@ class GuiMicroscope:
                 "position list into the GUI.\n" +
                 "NOTE: this will overwrite any existing position list"))
         # delete all:
+        def delete_all_positions():
+            make_empty_position_list()
+            self.total_positions_spinbox.update_and_validate(0)
+            self.current_position_spinbox.update_and_validate(0)
+            return None        
         delete_all_positions_button = tk.Button(
             self.positions_frame,
             text="Delete all positions",
-            command=self.delete_all_positions,
+            command=delete_all_positions,
             width=button_width,
             height=button_height)
         delete_all_positions_button.grid(row=1, column=0, padx=10, pady=10)
@@ -1894,10 +1849,37 @@ class GuiMicroscope:
                 ".txt files in the 'sols_gui_session' folder.\n" +
                 "NOTE: this operation cannot be reversed."))
         # delete current:
+        def delete_current_position():
+            if self.total_positions_spinbox.value == 0:
+                return
+            i = self.current_position_spinbox.value - 1
+            self.focus_piezo_position_list.pop(i)
+            self.XY_stage_position_list.pop(i)
+            # overwrite files:
+            with open(self.session_folder +
+                      "focus_piezo_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
+            with open(self.session_folder +
+                      "XY_stage_position_list.txt", "w") as file:
+                file.write(self.session_folder + '\n')
+            # update files:
+            with open(self.session_folder +
+                      "focus_piezo_position_list.txt", "a") as file:
+                for i in range(len(self.focus_piezo_position_list)):
+                    file.write(str(self.focus_piezo_position_list[i]) + ',\n')
+            with open(self.session_folder +
+                      "XY_stage_position_list.txt", "a") as file:
+                for i in range(len(self.XY_stage_position_list)):
+                    file.write(str(self.XY_stage_position_list[i]) + ',\n')
+            # update gui:
+            total_positions = len(self.focus_piezo_position_list)
+            self.total_positions_spinbox.update_and_validate(total_positions)
+            self.current_position_spinbox.update_and_validate(i)
+            return None
         delete_current_position_button = tk.Button(
             self.positions_frame,
             text="Delete current position",
-            command=self.delete_current_position,
+            command=delete_current_position,
             width=button_width,
             height=button_height)
         delete_current_position_button.grid(row=2, column=0, padx=10, pady=10)
@@ -2032,88 +2014,6 @@ class GuiMicroscope:
                 "position is not already at the end of the position list."))        
         return None
 
-    def make_empty_position_list(self):
-        self.focus_piezo_position_list = []
-        self.XY_stage_position_list = []
-        with open(self.session_folder +
-                  "focus_piezo_position_list.txt", "w") as file:
-            file.write(self.session_folder + '\n')
-        with open(self.session_folder +
-              "XY_stage_position_list.txt", "w") as file:
-            file.write(self.session_folder + '\n')
-        return None
-
-    def load_positions_from_folder(self):
-        # get folder from user:
-        folder_path = tk.filedialog.askdirectory(
-            parent=self.root,
-            initialdir=os.getcwd(),
-            title='Please choose a previous "gui session" folder')
-        # read files, parse into lists and update attributes:
-        focus_piezo_file_path = folder_path + '\\focus_piezo_position_list.txt'
-        XY_stage_file_path = folder_path + '\\XY_stage_position_list.txt'
-        with open(focus_piezo_file_path, 'r') as file:
-            focus_piezo_position_list = file.read().splitlines()[1:] # skip 1st
-        with open(XY_stage_file_path, 'r') as file:
-            XY_stage_position_list = file.read().splitlines()[1:] # skip 1st
-        for i, element in enumerate(focus_piezo_position_list):
-            focus_piezo_z_um = int(element.strip(','))
-            focus_piezo_position_list[i] = focus_piezo_z_um
-            self.focus_piezo_position_list.append(focus_piezo_z_um)
-        for i, element in enumerate(XY_stage_position_list):
-            XY_stage_position_mm = [
-                float(element.strip('[').strip(']').split(',')[0]),
-                float(element.strip('[').split(',')[1].strip(']').lstrip())]
-            XY_stage_position_list[i] = XY_stage_position_mm
-            self.XY_stage_position_list.append(XY_stage_position_mm)
-        # append positions to files:
-        with open(self.session_folder +
-                  "focus_piezo_position_list.txt", "a") as file:
-            for i in range(len(focus_piezo_position_list)):
-                file.write(str(focus_piezo_position_list[i]) + ',\n')
-        with open(self.session_folder +
-                  "XY_stage_position_list.txt", "a") as file:
-            for i in range(len(XY_stage_position_list)):
-                file.write(str(XY_stage_position_list[i]) + ',\n')
-        # update gui:
-        total_positions = len(self.focus_piezo_position_list)
-        self.total_positions_spinbox.update_and_validate(total_positions)
-        return None
-
-    def delete_all_positions(self):
-        self.make_empty_position_list()
-        self.total_positions_spinbox.update_and_validate(0)
-        self.current_position_spinbox.update_and_validate(0)
-        return None
-
-    def delete_current_position(self):
-        if self.total_positions_spinbox.value == 0:
-            return
-        i = self.current_position_spinbox.value - 1
-        self.focus_piezo_position_list.pop(i)
-        self.XY_stage_position_list.pop(i)
-        # overwrite files:
-        with open(self.session_folder +
-                  "focus_piezo_position_list.txt", "w") as file:
-            file.write(self.session_folder + '\n')
-        with open(self.session_folder +
-                  "XY_stage_position_list.txt", "w") as file:
-            file.write(self.session_folder + '\n')
-        # update files:
-        with open(self.session_folder +
-                  "focus_piezo_position_list.txt", "a") as file:
-            for i in range(len(self.focus_piezo_position_list)):
-                file.write(str(self.focus_piezo_position_list[i]) + ',\n')
-        with open(self.session_folder +
-                  "XY_stage_position_list.txt", "a") as file:
-            for i in range(len(self.XY_stage_position_list)):
-                file.write(str(self.XY_stage_position_list[i]) + ',\n')
-        # update gui:
-        total_positions = len(self.focus_piezo_position_list)
-        self.total_positions_spinbox.update_and_validate(total_positions)
-        self.current_position_spinbox.update_and_validate(i)
-        return None
-
     def update_position_list(self):
         # update list:
         self.focus_piezo_position_list.append(
@@ -2131,6 +2031,108 @@ class GuiMicroscope:
         with open(self.session_folder +
                   "XY_stage_position_list.txt", "a") as file:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
+        return None
+
+    def get_gui_settings(self):
+        # collect settings from gui and re-format for '.scope.apply_settings'
+        channels_per_slice, power_per_channel = [], []
+        if self.gui_transmitted_light.power.checkbox_value.get():
+            channels_per_slice.append('LED')
+            power_per_channel.append(self.gui_transmitted_light.power.value)
+        if self.gui_laser_box.power405.checkbox_value.get():
+            channels_per_slice.append('405')
+            power_per_channel.append(self.gui_laser_box.power405.value)
+        if self.gui_laser_box.power488.checkbox_value.get():
+            channels_per_slice.append('488')
+            power_per_channel.append(self.gui_laser_box.power488.value)
+        if self.gui_laser_box.power561.checkbox_value.get():
+            channels_per_slice.append('561')
+            power_per_channel.append(self.gui_laser_box.power561.value)
+        if self.gui_laser_box.power640.checkbox_value.get():
+            channels_per_slice.append('640')
+            power_per_channel.append(self.gui_laser_box.power640.value)
+        if len(channels_per_slice) == 0: # default TL if nothing selected
+            self.gui_transmitted_light.power.checkbox_value.set(1)
+            channels_per_slice = ('LED',)
+            power_per_channel = (self.gui_transmitted_light.power.value,)
+        # settings:
+        gui_settings = {
+            'channels_per_slice'  :channels_per_slice,
+            'power_per_channel'   :power_per_channel,
+            'emission_filter'     :self.gui_filter_wheel.emission_filter.get(),
+            'illumination_time_us':self.gui_camera.illumination_time_us.value,
+            'height_px'           :self.gui_camera.height_px.value,
+            'width_px'            :self.gui_camera.width_px.value,
+            'voxel_aspect_ratio'  :self.gui_galvo.voxel_aspect_ratio.value,
+            'scan_range_um'       :self.gui_galvo.scan_range_um.value,
+            'volumes_per_buffer'  :self.volumes_spinbox.value,
+            'focus_piezo_z_um'    :self.gui_focus_piezo.position_um.value,
+            'XY_stage_position_mm':self.gui_xy_stage.position_mm}
+        return gui_settings
+
+    def check_XY_stage(self):
+        # has the position changed? is the joystick being used? 
+        self.scope.apply_settings().join() # update attributes
+        XY_stage_position_mm = list(self.scope.XY_stage_position_mm)
+        self.XY_joystick_active = False
+        if   XY_stage_position_mm[0] == self.scope.XY_stage.x_min: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'left (-X)'
+        elif XY_stage_position_mm[0] == self.scope.XY_stage.x_max: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'right (+X)'
+        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_min: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'down (-Y)'
+        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_max: # moving
+            self.XY_joystick_active = True
+            self.XY_stage_last_move = 'up (+Y)'
+        return XY_stage_position_mm
+
+    def apply_settings(self, single_volume=False, check_XY_stage=True):
+        if check_XY_stage: # joystick used? If so update the gui:
+            XY_stage_position_mm = self.check_XY_stage()
+            if XY_stage_position_mm != self.gui_xy_stage.position_mm:
+                self.gui_xy_stage.update_position(XY_stage_position_mm)
+        gui_settings = self.get_gui_settings()
+        new_settings = len(gui_settings)*[None] # pass 'None' if no change
+        # check gui settings against applied settings:
+        if (self.applied_settings[
+            'channels_per_slice'] != gui_settings['channels_per_slice'] or
+            self.applied_settings[
+                'power_per_channel']  != gui_settings['power_per_channel']):
+            new_settings[0] = gui_settings['channels_per_slice']
+            new_settings[1] = gui_settings['power_per_channel']
+        for i, k in enumerate(list(self.applied_settings.keys())[2:-2]): #-2 XYZ
+            if self.applied_settings[k] != gui_settings[k]:
+                new_settings[i + 2] = gui_settings[k] # + 2 started at setting 2
+        if self.applied_settings[
+            'focus_piezo_z_um'] != gui_settings['focus_piezo_z_um']:
+            new_settings[9] = (gui_settings['focus_piezo_z_um'], 'absolute')
+        if not self.XY_joystick_active:
+            if self.applied_settings[
+                'XY_stage_position_mm'] != gui_settings['XY_stage_position_mm']:
+                new_settings[10] = (gui_settings['XY_stage_position_mm'][0],
+                                    gui_settings['XY_stage_position_mm'][1],
+                                    'absolute')
+        # apply settings:
+        if single_volume: new_settings[8] = 1
+        self.scope.apply_settings(
+            channels_per_slice      = new_settings[0],
+            power_per_channel       = new_settings[1],
+            emission_filter         = new_settings[2],
+            illumination_time_us    = new_settings[3],
+            height_px               = new_settings[4],
+            width_px                = new_settings[5],
+            voxel_aspect_ratio      = new_settings[6],
+            scan_range_um           = new_settings[7],
+            volumes_per_buffer      = new_settings[8],
+            focus_piezo_z_um        = new_settings[9],
+            XY_stage_position_mm    = new_settings[10])
+        # update settings attributes:
+        for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
+            self.applied_settings[k] = copy.deepcopy(gui_settings[k])
+        if single_volume: self.applied_settings['volumes_per_buffer'] = 1
         return None
 
     def init_gui_acquire(self):
