@@ -522,7 +522,7 @@ class GuiMicroscope:
         self.gui_xy_stage           = GuiXYStage(self.root)
         # load microscope GUI's and quit:
         self.gui_grid_navigator()  # navigates an XY grid of points
-        self.init_gui_tile_navigator()  # generates and navigates XY tiles
+        self.gui_tile_navigator()  # generates and navigates XY tiles
         self.init_gui_settings()        # collects settings from GUI
         self.init_gui_settings_output() # shows output from settings
         self.init_gui_position_list()   # navigates position lists
@@ -1126,7 +1126,7 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def init_gui_tile_navigator(self):
+    def gui_tile_navigator(self):
         tile_frame = tk.LabelFrame(
             self.root, text='TILE NAVIGATOR', bd=6)
         tile_frame.grid(
@@ -1170,11 +1170,85 @@ class GuiMicroscope:
                 "(in addition to the preview data) and populate the \n" +
                 "'POSITION LIST'."))
         # start tile preview:
+        def start_tile_preview():
+            print('\nTile preview -> started')
+            self.set_running_mode('tile_preview', enable=True)
+            self.apply_settings(single_volume=True)
+            self.update_gui_settings_output()
+            self.folder_name = self.get_folder_name() + '_tile'
+            # get tile parameters:
+            self.tile_rows = self.tile_array_width_spinbox.value
+            self.tile_cols = self.tile_rows
+            initial_XY_stage_position_mm = self.gui_xy_stage.position_mm
+            # calculate move size:
+            X_move_mm = 1e-3 * self.applied_settings[
+                'width_px'] * sols.sample_px_um
+            Y_move_mm = 1e-3 * self.applied_settings['scan_range_um']
+            # generate tile rows/cols and positions:
+            self.XY_tile_rc_list = []
+            self.XY_tile_position_list = []
+            for r in range(self.tile_rows):
+                for c in range(self.tile_cols):
+                    self.XY_tile_rc_list.append([r, c])
+                    XY_stage_position_mm = [
+                        initial_XY_stage_position_mm[0] - c * X_move_mm,
+                        initial_XY_stage_position_mm[1] + r * Y_move_mm]
+                    self.XY_tile_position_list.append(XY_stage_position_mm)
+            self.current_tile = 0
+            def run_tile_preview():
+                # update position:
+                r, c = self.XY_tile_rc_list[self.current_tile]
+                self.gui_xy_stage.update_position(
+                    self.XY_tile_position_list[self.current_tile])
+                self.apply_settings(single_volume=True, check_XY_stage=False)
+                # get tile:
+                name = "r%ic%i"%(r, c)
+                filename = name + '.tif'
+                preview_only = True
+                if self.save_tile_data_and_position.get():
+                    preview_only = False
+                    self.update_position_list()
+                self.scope.acquire(
+                    filename=filename,
+                    folder_name=self.folder_name,
+                    description=self.description_textbox.text,
+                    preview_only=preview_only).join()
+                tile_filename = (self.folder_name + '\preview\\' + filename)
+                while not os.path.isfile(tile_filename):
+                    self.root.after(self.gui_delay_ms)
+                tile = imread(tile_filename)
+                shape = tile.shape
+                # add reference:
+                tile = Image.fromarray(tile) # convert to PIL for ImageDraw
+                XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
+                font_size = int(0.1 * min(shape))
+                font = ImageFont.truetype('arial.ttf', font_size)
+                ImageDraw.Draw(tile).text(XY, name, fill=0, font=font)
+                # make base image:
+                if (r, c) == (0, 0):
+                    self.tile_preview = np.zeros(
+                        (self.tile_rows * shape[0],
+                         self.tile_cols * shape[1]), 'uint16')
+                # add current tile:
+                self.tile_preview[r * shape[0]:(r + 1) * shape[0],
+                                  c * shape[1]:(c + 1) * shape[1]] = tile
+                # display:
+                self.scope.display.show_tile_preview(self.tile_preview)
+                if (self.running_tile_preview.get() and
+                    self.current_tile < len(self.XY_tile_position_list) - 1): 
+                    self.current_tile += 1
+                    self.root.after(self.gui_delay_ms, run_tile_preview)
+                else:
+                    self.move_to_tile_button.config(state='normal')
+                    print('Tile preview -> finished\n')
+                return None
+            run_tile_preview()
+            return None
         self.running_tile_preview = tk.BooleanVar()
         start_tile_preview_button = tk.Button(
             tile_frame,
             text="Start tile",
-            command=self.start_tile_preview,
+            command=start_tile_preview,
             font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
@@ -1210,11 +1284,79 @@ class GuiMicroscope:
                 "NOTE: this is not immediate since some processes must \n" +
                 "finish once launched."))        
         # move to tile:
+        def move_to_tile():
+            move_to_tile_popup = tk.Toplevel()
+            move_to_tile_popup.title('Move to tile')
+            move_to_tile_popup.grab_set() # force user to interact
+            x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
+            move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))
+            # make buttons:
+            tile_buttons_frame = tk.LabelFrame(
+                move_to_tile_popup, text='XY TILES', bd=6)
+            tile_buttons_frame.grid(
+                row=0, column=1, rowspan=5, padx=10, pady=10)
+            button_width, button_height = 5, 2
+            tile_button_array = [
+                [None for c in range(self.tile_cols)] for r in range(
+                    self.tile_rows)]
+            tile_button_enabled_array = [
+                [None for c in range(self.tile_cols)] for r in range(
+                    self.tile_rows)]
+            for r in range(self.tile_rows):
+                for c in range(self.tile_cols):
+                    tile_button_enabled_array[r][c] = tk.BooleanVar()
+                    tile_button_array[r][c] = tk.Checkbutton(
+                        tile_buttons_frame,
+                        text='r%ic%i'%(r, c),
+                        variable=tile_button_enabled_array[r][c],
+                        indicatoron=0,
+                        width=button_width,
+                        height=button_height)
+                    tile_button_array[r][c].grid(
+                        row=r, column=c, padx=10, pady=10)
+            # set state:
+            r, c = self.XY_tile_rc_list[self.current_tile]
+            tile_button_enabled_array[r][c].set(1)
+            tile_button_array[r][c].config(state='disabled')
+            self.set_running_mode('move_to_tile', enable=True)
+            def run_move_to_tile():
+                if self.running_move_to_tile.get():
+                    for r in range(self.tile_rows):
+                        for c in range(self.tile_cols):
+                            if (tile_button_enabled_array[r][c].get() and
+                                [r, c] != self.XY_tile_rc_list[
+                                    self.current_tile]):
+                                cancel() # stop .after immediately:
+                                self.current_tile = self.XY_tile_rc_list.index(
+                                    [r, c])
+                                self.gui_xy_stage.update_position(
+                                    self.XY_tile_position_list[
+                                        self.current_tile])
+                                self.apply_settings(
+                                    single_volume=True, check_XY_stage=False)
+                                self.last_acquire_task.join()# don't accumulate
+                                self.last_acquire_task = self.scope.acquire()
+                                return None
+                    self.root.after(self.gui_delay_ms, run_move_to_tile)
+                return None
+            run_move_to_tile()
+            # cancel button:
+            def cancel():
+                self.running_move_to_tile.set(0)
+                move_to_tile_popup.destroy()
+                return None
+            button_width, button_height = 25, 2
+            cancel_button = tk.Button(
+                move_to_tile_popup, text="Cancel",
+                command=cancel,
+                height=button_height, width=button_width)
+            cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
+            return None
         self.running_move_to_tile = tk.BooleanVar()
         self.move_to_tile_button = tk.Button(
             tile_frame,
             text="Move to tile",
-            command=self.move_to_tile,
+            command=move_to_tile,
             width=button_width,
             height=button_height)
         self.move_to_tile_button.grid(row=4, column=0, padx=10, pady=10)
@@ -1226,147 +1368,6 @@ class GuiMicroscope:
                 "The 'Move to tile' button moves to the chosen tile \n" +
                 "location based on the absolute XY tile positions \n" +
                 "from the last tile routine."))
-        return None
-
-    def start_tile_preview(self):
-        print('\nTile preview -> started')
-        self.set_running_mode('tile_preview', enable=True)
-        self.apply_settings(single_volume=True)
-        self.update_gui_settings_output()
-        self.folder_name = self.get_folder_name() + '_tile'
-        # get tile parameters:
-        self.tile_rows = self.tile_array_width_spinbox.value
-        self.tile_cols = self.tile_rows
-        initial_XY_stage_position_mm = self.gui_xy_stage.position_mm
-        # calculate move size:
-        X_move_mm = 1e-3 * self.applied_settings['width_px'] * sols.sample_px_um
-        Y_move_mm = 1e-3 * self.applied_settings['scan_range_um']
-        # generate tile rows/cols and positions:
-        self.XY_tile_rc_list = []
-        self.XY_tile_position_list = []
-        for r in range(self.tile_rows):
-            for c in range(self.tile_cols):
-                self.XY_tile_rc_list.append([r, c])
-                XY_stage_position_mm = [
-                    initial_XY_stage_position_mm[0] - c * X_move_mm,
-                    initial_XY_stage_position_mm[1] + r * Y_move_mm]
-                self.XY_tile_position_list.append(XY_stage_position_mm)
-        self.current_tile = 0
-        def run_tile_preview():
-            # update position:
-            r, c = self.XY_tile_rc_list[self.current_tile]
-            self.gui_xy_stage.update_position(
-                self.XY_tile_position_list[self.current_tile])
-            self.apply_settings(single_volume=True, check_XY_stage=False)
-            # get tile:
-            name = "r%ic%i"%(r, c)
-            filename = name + '.tif'
-            preview_only = True
-            if self.save_tile_data_and_position.get():
-                preview_only = False
-                self.update_position_list()
-            self.scope.acquire(
-                filename=filename,
-                folder_name=self.folder_name,
-                description=self.description_textbox.text,
-                preview_only=preview_only).join()
-            tile_filename = (self.folder_name + '\preview\\' + filename)
-            while not os.path.isfile(tile_filename):
-                self.root.after(self.gui_delay_ms)
-            tile = imread(tile_filename)
-            shape = tile.shape
-            # add reference:
-            tile = Image.fromarray(tile) # convert to PIL format for ImageDraw
-            XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
-            font_size = int(0.1 * min(shape))
-            font = ImageFont.truetype('arial.ttf', font_size)
-            ImageDraw.Draw(tile).text(XY, name, fill=0, font=font)
-            # make base image:
-            if (r, c) == (0, 0):
-                self.tile_preview = np.zeros(
-                    (self.tile_rows * shape[0],
-                     self.tile_cols * shape[1]), 'uint16')
-            # add current tile:
-            self.tile_preview[r * shape[0]:(r + 1) * shape[0],
-                              c * shape[1]:(c + 1) * shape[1]] = tile
-            # display:
-            self.scope.display.show_tile_preview(self.tile_preview)
-            if (self.running_tile_preview.get() and
-                self.current_tile < len(self.XY_tile_position_list) - 1): 
-                self.current_tile += 1
-                self.root.after(self.gui_delay_ms, run_tile_preview)
-            else:
-                self.move_to_tile_button.config(state='normal')
-                print('Tile preview -> finished\n')
-            return None
-        run_tile_preview()
-        return None
-
-    def move_to_tile(self):
-        move_to_tile_popup = tk.Toplevel()
-        move_to_tile_popup.title('Move to tile')
-        move_to_tile_popup.grab_set() # force user to interact
-        x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
-        move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))
-        button_width, button_height = 25, 2
-        # cancel button:
-        def cancel():
-            self.running_move_to_tile.set(0)
-            move_to_tile_popup.destroy()
-            return None
-        cancel_button = tk.Button(
-            move_to_tile_popup, text="Cancel",
-            command=cancel,
-            height=button_height, width=button_width)
-        cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
-        # make buttons:
-        tile_buttons_frame = tk.LabelFrame(
-            move_to_tile_popup, text='XY TILES', bd=6)
-        tile_buttons_frame.grid(
-            row=0, column=1, rowspan=5, padx=10, pady=10)
-        button_width, button_height = 5, 2
-        tile_button_array = [
-            [None for c in range(self.tile_cols)] for r in range(
-                self.tile_rows)]
-        tile_button_enabled_array = [
-            [None for c in range(self.tile_cols)] for r in range(
-                self.tile_rows)]
-        for r in range(self.tile_rows):
-            for c in range(self.tile_cols):
-                tile_button_enabled_array[r][c] = tk.BooleanVar()
-                tile_button_array[r][c] = tk.Checkbutton(
-                    tile_buttons_frame,
-                    text='r%ic%i'%(r, c),
-                    variable=tile_button_enabled_array[r][c],
-                    indicatoron=0,
-                    width=button_width,
-                    height=button_height)
-                tile_button_array[r][c].grid(
-                    row=r, column=c, padx=10, pady=10)
-        # set state:
-        r, c = self.XY_tile_rc_list[self.current_tile]
-        tile_button_enabled_array[r][c].set(1)
-        tile_button_array[r][c].config(state='disabled')
-        self.set_running_mode('move_to_tile', enable=True)
-        def run_move_to_tile():
-            if self.running_move_to_tile.get():
-                for r in range(self.tile_rows):
-                    for c in range(self.tile_cols):
-                        if (tile_button_enabled_array[r][c].get() and
-                            [r, c] != self.XY_tile_rc_list[self.current_tile]):
-                            cancel() # stop .after immediately:
-                            self.current_tile = self.XY_tile_rc_list.index(
-                                [r, c])
-                            self.gui_xy_stage.update_position(
-                                self.XY_tile_position_list[self.current_tile])
-                            self.apply_settings(
-                                single_volume=True, check_XY_stage=False)
-                            self.last_acquire_task.join()# don't accumulate
-                            self.last_acquire_task = self.scope.acquire()
-                            return None
-                self.root.after(self.gui_delay_ms, run_move_to_tile)
-            return None
-        run_move_to_tile()
         return None
 
     def init_gui_settings(self):
