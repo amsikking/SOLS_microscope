@@ -523,8 +523,8 @@ class GuiMicroscope:
         # load microscope GUI's and quit:
         self.gui_grid_navigator()  # navigates an XY grid of points
         self.gui_tile_navigator()  # generates and navigates XY tiles
-        self.init_gui_settings()        # collects settings from GUI
-        self.init_gui_settings_output() # shows output from settings
+        self.gui_settings()        # collects settings from GUI
+        self.gui_settings_output() # shows output from settings
         self.init_gui_position_list()   # navigates position lists
         self.init_gui_acquire()         # microscope methods
         self.init_quit_button()
@@ -1370,7 +1370,7 @@ class GuiMicroscope:
                 "from the last tile routine."))
         return None
 
-    def init_gui_settings(self):
+    def gui_settings(self):
         self.settings_frame = tk.LabelFrame(
             self.root, text='SETTINGS (misc)', bd=6)
         self.settings_frame.grid(
@@ -1596,6 +1596,159 @@ class GuiMicroscope:
                 "run as fast as it can."))        
         return None
 
+    def gui_settings_output(self):
+        self.output_frame = tk.LabelFrame(
+            self.root, text='SETTINGS OUTPUT', bd=6)
+        self.output_frame.grid(
+            row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        self.output_frame.bind( # force update
+            '<Enter>', lambda event: self.output_frame.focus_set())
+        button_width, button_height = 25, 2
+        spinbox_width = 20
+        # auto update settings button:
+        def update_settings():
+            def run_update_settings():
+                if self.running_update_settings.get():
+                    self.apply_settings(check_XY_stage=False)
+                    self.update_gui_settings_output()
+                    self.root.after(self.gui_delay_ms, run_update_settings)
+                return None
+            self.set_running_mode('update_settings')
+            run_update_settings()
+            return None
+        self.running_update_settings = tk.BooleanVar()
+        update_settings_button = tk.Checkbutton(
+            self.output_frame,
+            text='Auto update (On/Off)',
+            variable=self.running_update_settings,
+            command=update_settings,
+            indicatoron=0,
+            font=('Segoe UI', '10', 'italic'),
+            width=button_width,
+            height=button_height)
+        update_settings_button.grid(row=0, column=0, padx=10, pady=10)
+        update_settings_button_tip = tix.Balloon(update_settings_button)
+        update_settings_button_tip.bind_widget(
+            update_settings_button,
+            balloonmsg=(
+                "Press 'Auto update (On/Off)' to continously apply the \n" +
+                "latest settings to the microscope and see how this \n" +
+                "affects the 'SETTINGS OUTPUT'.\n" +
+                "NOTE: selecting this mode will cancel other modes"))
+        # volumes per second textbox:
+        self.volumes_per_s_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Volumes per second',
+            default_text='None',
+            row=1,
+            width=spinbox_width,
+            height=1)
+        volumes_per_s_textbox_tip = tix.Balloon(self.volumes_per_s_textbox)
+        volumes_per_s_textbox_tip.bind_widget(
+            self.volumes_per_s_textbox,
+            balloonmsg=(
+                "Shows the 'Volumes per second' (Vps) based on the \n" +
+                "settings that were last applied to the microscope.\n" +
+                "NOTE: this is the volumetric rate for the acquisition \n" +
+                "(i.e. during the analogue out 'play') and does reflect \n" +
+                "any delays or latency between acquisitions. This value \n" +
+                "is only updated when 'Auto update (On/Off)' is running \n" +
+                "or one of the 'ACQUIRE' buttons is pressed."))
+        # total memory textbox:
+        self.total_memory_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Total memory (GB)',
+            default_text='None',
+            row=2,
+            width=spinbox_width,
+            height=1)
+        total_memory_textbox_tip = tix.Balloon(self.total_memory_textbox)
+        total_memory_textbox_tip.bind_widget(
+            self.total_memory_textbox,
+            balloonmsg=(
+                "Shows the 'Total memory (GB)' that the microscope will \n" +
+                "need to run the settings that were last applied.\n" +
+                "NOTE: this can be useful for montoring resources and \n" +
+                "avoiding memory limits. This value is only updated when \n" +
+                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
+                "buttons is pressed."))
+        # total storage textbox:
+        self.total_storage_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Total storage (GB)',
+            default_text='None',
+            row=3,
+            width=spinbox_width,
+            height=1)
+        total_storage_textbox_tip = tix.Balloon(self.total_storage_textbox)
+        total_storage_textbox_tip.bind_widget(
+            self.total_storage_textbox,
+            balloonmsg=(
+                "Shows the 'Total storage (GB)' that the microscope will \n" +
+                "need to save the data if 'Run acquire' is pressed (based \n" +
+                "on the settings that were last applied).\n" +
+                "NOTE: this can be useful for montoring resources and \n" +
+                "avoiding storage limits. This value is only updated when \n" +
+                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
+                "buttons is pressed."))
+        # min time textbox:
+        self.min_time_textbox = tkcw.Textbox(
+            self.output_frame,
+            label='Minimum acquire time (s)',
+            default_text='None',
+            row=4,
+            width=spinbox_width,
+            height=1)
+        total_storage_textbox_tip = tix.Balloon(self.min_time_textbox)
+        total_storage_textbox_tip.bind_widget(
+            self.min_time_textbox,
+            balloonmsg=(
+                "Shows the 'Minimum acquire time (s)' that the microscope \n" +
+                "will need if 'Run acquire' is pressed (based on the \n" +
+                "settings that were last applied).\n" +
+                "NOTE: this value does not take into account the \n" +
+                "'move time' when using the 'Loop over position list' \n" +
+                "option (so the actual time will be significantly more). \n" +
+                "This value is only updated when 'Auto update (On/Off)' is \n" +
+                "running or one of the 'ACQUIRE' buttons is pressed\n"))
+        return None
+
+    def update_gui_settings_output(self):
+        self.scope.apply_settings().join() # update attributes
+        # volumes per second:
+        text = '%0.3f'%self.scope.volumes_per_s
+        self.volumes_per_s_textbox.textbox.delete('1.0', '10.0')
+        self.volumes_per_s_textbox.textbox.insert('1.0', text)
+        # calculate memory:
+        total_memory_gb = 1e-9 * self.scope.total_bytes
+        max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
+        memory_pct = 100 * total_memory_gb / max_memory_gb
+        text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
+        self.total_memory_textbox.textbox.delete('1.0', '10.0')
+        self.total_memory_textbox.textbox.insert('1.0', text)
+        # get position count:
+        positions = 1
+        if self.loop_over_position_list.get():
+            positions = max(len(self.XY_stage_position_list), 1)
+        # calculate storage:
+        acquires = self.acquire_number_spinbox.value
+        data_gb = 1e-9 * self.scope.bytes_per_data_buffer
+        preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
+        total_storage_gb = (data_gb + preview_gb) * positions * acquires
+        text = '%0.3f'%total_storage_gb
+        self.total_storage_textbox.textbox.delete('1.0', '10.0')
+        self.total_storage_textbox.textbox.insert('1.0', text)        
+        # calculate time:
+        min_acquire_time_s = self.scope.buffer_time_s * positions
+        min_total_time_s = min_acquire_time_s * acquires
+        if self.delay_spinbox.value > min_acquire_time_s:
+            min_total_time_s = (
+                self.delay_spinbox.value * (acquires - 1) + min_acquire_time_s)
+        text = '%0.6f (%0.0f min)'%(min_total_time_s, (min_total_time_s / 60))
+        self.min_time_textbox.textbox.delete('1.0', '10.0')
+        self.min_time_textbox.textbox.insert('1.0', text)
+        return None
+
     def get_gui_settings(self):
         # collect settings from gui and re-format for '.scope.apply_settings'
         channels_per_slice, power_per_channel = [], []
@@ -1696,160 +1849,6 @@ class GuiMicroscope:
         for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
             self.applied_settings[k] = copy.deepcopy(gui_settings[k])
         if single_volume: self.applied_settings['volumes_per_buffer'] = 1
-        return None
-
-    def init_gui_settings_output(self):
-        self.output_frame = tk.LabelFrame(
-            self.root, text='SETTINGS OUTPUT', bd=6)
-        self.output_frame.grid(
-            row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.output_frame.bind( # force update
-            '<Enter>', lambda event: self.output_frame.focus_set())
-        button_width, button_height = 25, 2
-        spinbox_width = 20
-        # auto update settings button:
-        self.running_update_settings = tk.BooleanVar()
-        update_settings_button = tk.Checkbutton(
-            self.output_frame,
-            text='Auto update (On/Off)',
-            variable=self.running_update_settings,
-            command=self.init_update_settings,
-            indicatoron=0,
-            font=('Segoe UI', '10', 'italic'),
-            width=button_width,
-            height=button_height)
-        update_settings_button.grid(row=0, column=0, padx=10, pady=10)
-        update_settings_button_tip = tix.Balloon(update_settings_button)
-        update_settings_button_tip.bind_widget(
-            update_settings_button,
-            balloonmsg=(
-                "Press 'Auto update (On/Off)' to continously apply the \n" +
-                "latest settings to the microscope and see how this \n" +
-                "affects the 'SETTINGS OUTPUT'.\n" +
-                "NOTE: selecting this mode will cancel other modes"))
-        # volumes per second textbox:
-        self.volumes_per_s_textbox = tkcw.Textbox(
-            self.output_frame,
-            label='Volumes per second',
-            default_text='None',
-            row=1,
-            width=spinbox_width,
-            height=1)
-        volumes_per_s_textbox_tip = tix.Balloon(self.volumes_per_s_textbox)
-        volumes_per_s_textbox_tip.bind_widget(
-            self.volumes_per_s_textbox,
-            balloonmsg=(
-                "Shows the 'Volumes per second' (Vps) based on the \n" +
-                "settings that were last applied to the microscope.\n" +
-                "NOTE: this is the volumetric rate for the acquisition \n" +
-                "(i.e. during the analogue out 'play') and does reflect \n" +
-                "any delays or latency between acquisitions. This value \n" +
-                "is only updated when 'Auto update (On/Off)' is running \n" +
-                "or one of the 'ACQUIRE' buttons is pressed."))
-        # total memory textbox:
-        self.total_memory_textbox = tkcw.Textbox(
-            self.output_frame,
-            label='Total memory (GB)',
-            default_text='None',
-            row=2,
-            width=spinbox_width,
-            height=1)
-        total_memory_textbox_tip = tix.Balloon(self.total_memory_textbox)
-        total_memory_textbox_tip.bind_widget(
-            self.total_memory_textbox,
-            balloonmsg=(
-                "Shows the 'Total memory (GB)' that the microscope will \n" +
-                "need to run the settings that were last applied.\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding memory limits. This value is only updated when \n" +
-                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
-                "buttons is pressed."))
-        # total storage textbox:
-        self.total_storage_textbox = tkcw.Textbox(
-            self.output_frame,
-            label='Total storage (GB)',
-            default_text='None',
-            row=3,
-            width=spinbox_width,
-            height=1)
-        total_storage_textbox_tip = tix.Balloon(self.total_storage_textbox)
-        total_storage_textbox_tip.bind_widget(
-            self.total_storage_textbox,
-            balloonmsg=(
-                "Shows the 'Total storage (GB)' that the microscope will \n" +
-                "need to save the data if 'Run acquire' is pressed (based \n" +
-                "on the settings that were last applied).\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding storage limits. This value is only updated when \n" +
-                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
-                "buttons is pressed."))
-        # min time textbox:
-        self.min_time_textbox = tkcw.Textbox(
-            self.output_frame,
-            label='Minimum acquire time (s)',
-            default_text='None',
-            row=4,
-            width=spinbox_width,
-            height=1)
-        total_storage_textbox_tip = tix.Balloon(self.min_time_textbox)
-        total_storage_textbox_tip.bind_widget(
-            self.min_time_textbox,
-            balloonmsg=(
-                "Shows the 'Minimum acquire time (s)' that the microscope \n" +
-                "will need if 'Run acquire' is pressed (based on the \n" +
-                "settings that were last applied).\n" +
-                "NOTE: this value does not take into account the \n" +
-                "'move time' when using the 'Loop over position list' \n" +
-                "option (so the actual time will be significantly more). \n" +
-                "This value is only updated when 'Auto update (On/Off)' is \n" +
-                "running or one of the 'ACQUIRE' buttons is pressed\n"))
-        return None
-
-    def init_update_settings(self):
-        self.set_running_mode('update_settings')
-        self.update_settings()
-
-    def update_settings(self):
-        if self.running_update_settings.get():
-            self.apply_settings(check_XY_stage=False)
-            self.update_gui_settings_output()
-            self.root.after(self.gui_delay_ms, self.update_settings)
-        return None
-
-    def update_gui_settings_output(self):
-        self.scope.apply_settings().join() # update attributes
-        # volumes per second:
-        text = '%0.3f'%self.scope.volumes_per_s
-        self.volumes_per_s_textbox.textbox.delete('1.0', '10.0')
-        self.volumes_per_s_textbox.textbox.insert('1.0', text)
-        # calculate memory:
-        total_memory_gb = 1e-9 * self.scope.total_bytes
-        max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
-        memory_pct = 100 * total_memory_gb / max_memory_gb
-        text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
-        self.total_memory_textbox.textbox.delete('1.0', '10.0')
-        self.total_memory_textbox.textbox.insert('1.0', text)
-        # get position count:
-        positions = 1
-        if self.loop_over_position_list.get():
-            positions = max(len(self.XY_stage_position_list), 1)
-        # calculate storage:
-        acquires = self.acquire_number_spinbox.value
-        data_gb = 1e-9 * self.scope.bytes_per_data_buffer
-        preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
-        total_storage_gb = (data_gb + preview_gb) * positions * acquires
-        text = '%0.3f'%total_storage_gb
-        self.total_storage_textbox.textbox.delete('1.0', '10.0')
-        self.total_storage_textbox.textbox.insert('1.0', text)        
-        # calculate time:
-        min_acquire_time_s = self.scope.buffer_time_s * positions
-        min_total_time_s = min_acquire_time_s * acquires
-        if self.delay_spinbox.value > min_acquire_time_s:
-            min_total_time_s = (
-                self.delay_spinbox.value * (acquires - 1) + min_acquire_time_s)
-        text = '%0.6f (%0.0f min)'%(min_total_time_s, (min_total_time_s / 60))
-        self.min_time_textbox.textbox.delete('1.0', '10.0')
-        self.min_time_textbox.textbox.insert('1.0', text)
         return None
 
     def init_gui_position_list(self):
