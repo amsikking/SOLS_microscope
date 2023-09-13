@@ -521,7 +521,7 @@ class GuiMicroscope:
         self.gui_focus_piezo        = GuiFocusPiezo(self.root)
         self.gui_xy_stage           = GuiXYStage(self.root)
         # load microscope GUI's and quit:
-        self.init_gui_grid_navigator()  # navigates an XY grid of points
+        self.gui_grid_navigator()  # navigates an XY grid of points
         self.init_gui_tile_navigator()  # generates and navigates XY tiles
         self.init_gui_settings()        # collects settings from GUI
         self.init_gui_settings_output() # shows output from settings
@@ -607,7 +607,7 @@ class GuiMicroscope:
                 '%03i_'%folder_index + self.label_textbox.text)
         return folder_name
 
-    def init_gui_grid_navigator(self):
+    def gui_grid_navigator(self):
         grid_frame = tk.LabelFrame(
             self.root, text='GRID NAVIGATOR', bd=6)
         grid_frame.grid(
@@ -619,12 +619,60 @@ class GuiMicroscope:
         # set grid defaults:
         self.grid_rows = 2
         self.grid_cols = 4
-        self.grid_spacing_um = 1000        
+        self.grid_spacing_um = 1000
+        # generate grid buttons -> used by various functions:
+        def generate_grid_buttons(master, enabled=True):
+            self.generate_grid_buttons_frame = tk.LabelFrame(
+                master, text='XY GRID', bd=6)
+            self.generate_grid_buttons_frame.grid(
+                row=0, column=1, rowspan=5, padx=10, pady=10)
+            button_width, button_height = 5, 2
+            self.grid_button_array = [
+                [None for c in range(self.grid_cols)] for r in range(
+                    self.grid_rows)]
+            self.grid_button_enabled_array = [
+                [None for c in range(self.grid_cols)] for r in range(
+                    self.grid_rows)]
+            for r in range(self.grid_rows):
+                for c in range(self.grid_cols):
+                    name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
+                    self.grid_button_enabled_array[r][c] = tk.BooleanVar()
+                    self.grid_button_array[r][c] = tk.Checkbutton(
+                        self.generate_grid_buttons_frame,
+                        text=name,
+                        variable=self.grid_button_enabled_array[r][c],
+                        indicatoron=0,
+                        width=button_width,
+                        height=button_height)
+                    self.grid_button_array[r][c].grid(
+                        row=r, column=c, padx=10, pady=10)
+                    if not enabled:
+                        self.grid_button_array[r][c].config(state='disabled')
+            return None
         # load from file:
+        def load_grid_from_file():
+            # get file from user:
+            file_path = tk.filedialog.askopenfilename(
+                parent=self.root,
+                initialdir=os.getcwd(),
+                title='Please choose a previous "grid" file (.txt)')        
+            with open(file_path, 'r') as file:
+                grid_data = file.read().splitlines()
+            # parse and update attributes:
+            self.grid_rows = int(grid_data[0].split(':')[1])
+            self.grid_cols = int(grid_data[1].split(':')[1])
+            self.grid_spacing_um = int(grid_data[2].split(':')[1])
+            # show user:
+            create_grid()
+            # reset state of grid buttons:
+            self.set_grid_location_button.config(state='normal')
+            self.move_to_grid_location_button.config(state='disabled')
+            self.start_grid_preview_button.config(state='disabled')
+            return None
         load_grid_from_file_button = tk.Button(
             grid_frame,
             text="Load from file",
-            command=self.load_grid_from_file,
+            command=load_grid_from_file,
             font=('Segoe UI', '10', 'underline'),
             width=button_width,
             height=button_height)
@@ -638,11 +686,89 @@ class GuiMicroscope:
                 "'sols_gui_session' folder and load these settings into \n" +
                 "the GUI.\n"
                 "NOTE: this will overwrite any existing grid parameters"))
-        # create grid:
+        # create grid:        
+        def create_grid():
+            # popup:
+            create_grid_popup = tk.Toplevel()
+            create_grid_popup.title('Create grid')
+            create_grid_popup.grab_set() # force user to interact
+            x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
+            create_grid_popup.geometry("+%d+%d" % (x + 800, y + 400))
+            button_width, button_height = 25, 2
+            spinbox_width = 20
+            # user input:
+            self.grid_rows_spinbox = tkcw.CheckboxSliderSpinbox(
+                create_grid_popup,
+                label='How many rows? (1-16)',
+                checkbox_enabled=False,
+                slider_enabled=False,
+                min_value=1,
+                max_value=16,
+                default_value=self.grid_rows,
+                row=0,
+                width=spinbox_width,
+                sticky='n')
+            self.grid_cols_spinbox = tkcw.CheckboxSliderSpinbox(
+                create_grid_popup,
+                label='How many columns? (1-24)',
+                checkbox_enabled=False,
+                slider_enabled=False,
+                min_value=1,
+                max_value=24,
+                default_value=self.grid_cols,
+                row=1,
+                width=spinbox_width,
+                sticky='n')
+            self.grid_spacing_spinbox = tkcw.CheckboxSliderSpinbox(
+                create_grid_popup,
+                label='What is the spacing (um)?',
+                checkbox_enabled=False,
+                slider_enabled=False,
+                min_value=1,
+                max_value=20000,
+                default_value=self.grid_spacing_um,
+                row=2,
+                width=spinbox_width,
+                sticky='n')
+            # create button:
+            def create():
+                if hasattr(self, 'generate_grid_buttons_frame'):
+                    self.generate_grid_buttons_frame.destroy()
+                # update attributes:
+                self.grid_rows = self.grid_rows_spinbox.value
+                self.grid_cols = self.grid_cols_spinbox.value
+                self.grid_spacing_um = self.grid_spacing_spinbox.value
+                # show user and reset state of grid buttons:
+                generate_grid_buttons(create_grid_popup, enabled=False)
+                self.set_grid_location_button.config(state='normal')
+                self.move_to_grid_location_button.config(state='disabled')
+                self.start_grid_preview_button.config(state='disabled')
+                # overwrite grid file:
+                with open(self.session_folder +
+                          "grid_navigator_parameters.txt", "w") as file:
+                    file.write('rows:%i'%self.grid_rows + '\n')
+                    file.write('columns:%i'%self.grid_cols + '\n')
+                    file.write('spacing_um:%i'%self.grid_spacing_um + '\n')
+                return None
+            create_button = tk.Button(
+                create_grid_popup, text="Create",
+                command=create,
+                height=button_height, width=button_width)
+            create_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
+            create_button.bind( # force update
+                '<Enter>', lambda event: create_grid_popup.focus_set())
+            # exit button:
+            exit_button = tk.Button(
+                create_grid_popup, text="Exit",
+                command=create_grid_popup.destroy,
+                height=button_height, width=button_width)
+            exit_button.grid(row=4, column=0, padx=10, pady=10, sticky='n')
+            create()
+            return None
         create_grid_button = tk.Button(
             grid_frame,
             text="Create grid",
-            command=self.create_grid,
+            command=create_grid,
             width=button_width,
             height=button_height)
         create_grid_button.grid(row=1, column=0, padx=10, pady=10)
@@ -656,11 +782,62 @@ class GuiMicroscope:
                 "to move around multiwell plates (or any grid like sample).\n" +
                 "NOTE: this will overwrite any existing grid parameters"))
         # set location:
+        def set_grid_location():
+            set_grid_location_popup = tk.Toplevel()
+            set_grid_location_popup.title('Set current location')
+            set_grid_location_popup.grab_set() # force user to interact
+            x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
+            set_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
+            generate_grid_buttons(set_grid_location_popup)
+            self.set_running_mode('set_grid_location', enable=True)
+            def run_set_grid_location():
+                if self.running_set_grid_location.get():
+                    for r in range(self.grid_rows):
+                        for c in range(self.grid_cols):
+                            if self.grid_button_enabled_array[r][c].get():
+                                # stop .after immediately:
+                                self.running_set_grid_location.set(0)
+                                set_grid_location_popup.destroy()
+                                # update grid:
+                                self.grid_location_rc = [r, c]
+                                update_grid_location()
+                                # get current position and spacing:
+                                XY_stage_position_mm = self.check_XY_stage()
+                                spacing_mm = self.grid_spacing_um / 1000
+                                # set home position:
+                                self.grid_home_mm = [
+                                    XY_stage_position_mm[0] + c * spacing_mm,
+                                    XY_stage_position_mm[1] - r * spacing_mm]
+                                # make grid of positions:
+                                self.grid_positions_mm = [
+                                    [None for c in range(
+                                    self.grid_cols)] for j in range(
+                                        self.grid_rows)]
+                                for rows in range(self.grid_rows):
+                                    for cols in range(self.grid_cols):
+                                        self.grid_positions_mm[rows][cols] = [
+                                            self.grid_home_mm[0] - (
+                                                cols * spacing_mm),
+                                            self.grid_home_mm[1] + (
+                                                rows * spacing_mm)]
+                                # allow moves:
+                                self.move_to_grid_location_button.config(
+                                    state='normal')
+                                self.start_grid_preview_button.config(
+                                        state='disabled')
+                                if self.grid_location_rc == [0, 0]:
+                                    self.start_grid_preview_button.config(
+                                        state='normal')
+                                return None
+                    self.root.after(self.gui_delay_ms, run_set_grid_location)
+                return None
+            run_set_grid_location()
+            return None
         self.running_set_grid_location = tk.BooleanVar()
         self.set_grid_location_button = tk.Button(
             grid_frame,
             text="Set grid location",
-            command=self.set_grid_location,
+            command=set_grid_location,
             width=button_width,
             height=button_height)
         self.set_grid_location_button.grid(row=2, column=0, padx=10, pady=10)
@@ -675,6 +852,12 @@ class GuiMicroscope:
                 "this operation (i.e. this operation 'homes' the grid). \n" +
                 "To change the grid origin simply update with this button"))
         # current location:
+        def update_grid_location():
+            name = '%s%i'%(chr(ord('@')+ self.grid_location_rc[0] + 1),
+                           self.grid_location_rc[1] + 1)
+            self.grid_location_textbox.textbox.delete('1.0', '10.0')
+            self.grid_location_textbox.textbox.insert('1.0', name)
+            return None
         self.grid_location_textbox = tkcw.Textbox(
             grid_frame,
             label='Grid location',
@@ -694,11 +877,63 @@ class GuiMicroscope:
                 "aware of XY moves made elsewhere (e.g. with the joystick \n" +
                 "or 'XY STAGE' panel)."))
         # move to location:
+        def move_to_grid_location():
+            move_to_grid_location_popup = tk.Toplevel()
+            move_to_grid_location_popup.title('Move to location')
+            move_to_grid_location_popup.grab_set() # force user to interact
+            x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
+            move_to_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
+            button_width, button_height = 25, 2
+            generate_grid_buttons(move_to_grid_location_popup)
+            r, c = self.grid_location_rc
+            self.grid_button_enabled_array[r][c].set(1)
+            self.grid_button_array[r][c].config(state='disabled')
+            self.set_running_mode('move_to_grid_location', enable=True)
+            def run_move_to_grid_location():
+                if self.running_move_to_grid_location.get():
+                    for r in range(self.grid_rows):
+                        for c in range(self.grid_cols):
+                            if (self.grid_button_enabled_array[r][c].get() and
+                                [r, c] != self.grid_location_rc):
+                                cancel() # stop .after immediately
+                                # update gui, apply and display:
+                                XY_stage_position_mm = (
+                                    self.grid_positions_mm[r][c])
+                                self.gui_xy_stage.update_position(
+                                    XY_stage_position_mm)
+                                self.apply_settings(
+                                    single_volume=True, check_XY_stage=False)
+                                self.last_acquire_task.join()# don't accumulate
+                                self.last_acquire_task = self.scope.acquire()
+                                # update attributes and buttons:
+                                self.grid_location_rc = [r, c]
+                                update_grid_location()
+                                self.start_grid_preview_button.config(
+                                    state='disabled')
+                                if [r, c] == [0, 0]:
+                                    self.start_grid_preview_button.config(
+                                        state='normal')
+                                return None
+                    self.root.after(
+                        self.gui_delay_ms, run_move_to_grid_location)
+                return None
+            run_move_to_grid_location()
+            # cancel button:
+            def cancel():
+                self.running_move_to_grid_location.set(0)
+                move_to_grid_location_popup.destroy()
+                return None
+            cancel_button = tk.Button(
+                move_to_grid_location_popup, text="Cancel",
+                command=cancel,
+                height=button_height, width=button_width)
+            cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
+            return None
         self.running_move_to_grid_location = tk.BooleanVar()
         self.move_to_grid_location_button = tk.Button(
             grid_frame,
             text="Move to grid location",
-            command=self.move_to_grid_location,
+            command=move_to_grid_location,
             width=button_width,
             height=button_height)
         self.move_to_grid_location_button.grid(
@@ -746,11 +981,116 @@ class GuiMicroscope:
                 "preview (from A1)' button will tile the grid locations \n" +
                 "with the number of tiles set by the 'TILE NAVIGATOR'."))
         # start grid preview:
+        def start_grid_preview():
+            print('\nGrid preview -> started')
+            self.set_running_mode('grid_preview', enable=True)
+            self.apply_settings(single_volume=True)
+            self.update_gui_settings_output()
+            folder_name = self.get_folder_name() + '_grid'
+            if self.tile_the_grid.get():
+                folder_name = self.get_folder_name() + '_grid_tile'
+                # get tile parameters:
+                self.tile_rows = self.tile_array_width_spinbox.value
+                self.tile_cols = self.tile_rows
+                # calculate move size:
+                self.tile_X_mm = 1e-3 * self.applied_settings[
+                    'width_px'] * sols.sample_px_um
+                self.tile_Y_mm = 1e-3 * self.applied_settings['scan_range_um']
+            # generate rows/cols list:
+            self.XY_grid_rc_list = []
+            for r in range(self.grid_rows):
+                for c in range(self.grid_cols):
+                    if self.tile_the_grid.get():
+                        for tile_r in range(self.tile_rows):
+                            for tile_c in range(self.tile_cols):
+                                self.XY_grid_rc_list.append(
+                                    [r, c, tile_r, tile_c])
+                    else:
+                        self.XY_grid_rc_list.append([r, c])
+            self.current_grid_image = 0
+            def run_grid_preview():
+                if self.tile_the_grid.get():
+                    r, c, tile_r, tile_c = self.XY_grid_rc_list[
+                        self.current_grid_image]
+                    name = '%s%i_r%ic%i'%(
+                        chr(ord('@')+r + 1), c + 1, tile_r, tile_c)
+                    XY_stage_position_mm = [
+                        self.grid_positions_mm[r][c][0] - (
+                            tile_c * self.tile_X_mm),
+                        self.grid_positions_mm[r][c][1] + (
+                            tile_r * self.tile_Y_mm)]
+                    self.gui_xy_stage.update_position(XY_stage_position_mm)
+                else:
+                    r, c = self.XY_grid_rc_list[self.current_grid_image]
+                    name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
+                    self.gui_xy_stage.update_position(
+                        self.grid_positions_mm[r][c])
+                filename = name + '.tif'
+                # update gui and move stage:
+                self.apply_settings(single_volume=True, check_XY_stage=False)
+                self.grid_location_rc = [r, c]
+                update_grid_location()
+                # check mode:
+                preview_only = True
+                if self.save_grid_data_and_position.get():
+                    preview_only = False
+                    self.update_position_list()
+                # get image:
+                self.scope.acquire(
+                    filename=filename,
+                    folder_name=folder_name,
+                    description=self.description_textbox.text,
+                    preview_only=preview_only).join()
+                grid_preview_filename = (folder_name + '\preview\\' + filename)
+                while not os.path.isfile(grid_preview_filename):
+                    self.root.after(self.gui_delay_ms)
+                grid_image = imread(grid_preview_filename)
+                shape = grid_image.shape
+                # add reference:
+                grid_image = Image.fromarray(grid_image) # convert to ImageDraw
+                XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
+                font_size = int(0.1 * min(shape))
+                font = ImageFont.truetype('arial.ttf', font_size)
+                ImageDraw.Draw(grid_image).text(XY, name, fill=0, font=font)
+                # make grid image:
+                if self.tile_the_grid.get():
+                    if (r, c, tile_r, tile_c) == (0, 0, 0, 0):
+                        self.grid_preview = np.zeros(
+                            (self.grid_rows * shape[0] * self.tile_rows,
+                             self.grid_cols * shape[1] * self.tile_cols),
+                            'uint16')
+                    self.grid_preview[
+                        (r * self.tile_rows + tile_r) * shape[0]:
+                        (r * self.tile_rows + tile_r + 1) * shape[0],
+                        (c * self.tile_cols + tile_c) * shape[1]:
+                        (c * self.tile_cols + tile_c + 1) * shape[1]
+                        ] = grid_image
+                else:
+                    if (r, c) == (0, 0):
+                        self.grid_preview = np.zeros(
+                            (self.grid_rows * shape[0],
+                             self.grid_cols * shape[1]), 'uint16')
+                    self.grid_preview[
+                        r * shape[0]:(r + 1) * shape[0],
+                        c * shape[1]:(c + 1) * shape[1]
+                        ] = grid_image
+                # display:
+                self.scope.display.show_grid_preview(self.grid_preview)
+                # check before re-run:
+                if (self.running_grid_preview.get() and
+                    self.current_grid_image < len(self.XY_grid_rc_list) - 1):
+                    self.current_grid_image += 1
+                    self.root.after(self.gui_delay_ms, run_grid_preview)
+                else:
+                    print('Grid preview -> finished\n')
+                return None
+            run_grid_preview()
+            return None
         self.running_grid_preview = tk.BooleanVar()
         self.start_grid_preview_button = tk.Button(
             grid_frame,
             text="Start grid preview (from A1)",
-            command=self.start_grid_preview,
+            command=start_grid_preview,
             font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
@@ -784,342 +1124,6 @@ class GuiMicroscope:
                 "grid preview generation.\n" +
                 "NOTE: this is not immediate since some processes must \n" +
                 "finish once launched."))
-        return None
-
-    def load_grid_from_file(self):
-        # get file from user:
-        file_path = tk.filedialog.askopenfilename(
-            parent=self.root,
-            initialdir=os.getcwd(),
-            title='Please choose a previous "grid" file (.txt)')        
-        with open(file_path, 'r') as file:
-            grid_data = file.read().splitlines()
-        # parse and update attributes:
-        self.grid_rows = int(grid_data[0].split(':')[1])
-        self.grid_cols = int(grid_data[1].split(':')[1])
-        self.grid_spacing_um = int(grid_data[2].split(':')[1])
-        # show user:
-        self.create_grid()
-        # reset state of grid buttons:
-        self.set_grid_location_button.config(state='normal')
-        self.move_to_grid_location_button.config(state='disabled')
-        self.start_grid_preview_button.config(state='disabled')
-        return None
-
-    def generate_grid_buttons(self, master, enabled=True):
-        self.generate_grid_buttons_frame = tk.LabelFrame(
-            master, text='XY GRID', bd=6)
-        self.generate_grid_buttons_frame.grid(
-            row=0, column=1, rowspan=5, padx=10, pady=10)
-        button_width, button_height = 5, 2
-        self.grid_button_array = [
-            [None for c in range(self.grid_cols)] for r in range(
-                self.grid_rows)]
-        self.grid_button_enabled_array = [
-            [None for c in range(self.grid_cols)] for r in range(
-                self.grid_rows)]
-        for r in range(self.grid_rows):
-            for c in range(self.grid_cols):
-                name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
-                self.grid_button_enabled_array[r][c] = tk.BooleanVar()
-                self.grid_button_array[r][c] = tk.Checkbutton(
-                    self.generate_grid_buttons_frame,
-                    text=name,
-                    variable=self.grid_button_enabled_array[r][c],
-                    indicatoron=0,
-                    width=button_width,
-                    height=button_height)
-                self.grid_button_array[r][c].grid(
-                    row=r, column=c, padx=10, pady=10)
-                if not enabled:
-                    self.grid_button_array[r][c].config(state='disabled')
-        return None
-
-    def create_grid(self):
-        # popup:
-        create_grid_popup = tk.Toplevel()
-        create_grid_popup.title('Create grid')
-        create_grid_popup.grab_set() # force user to interact
-        x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
-        create_grid_popup.geometry("+%d+%d" % (x + 800, y + 400))
-        button_width, button_height = 25, 2
-        spinbox_width = 20
-        # user input:
-        self.grid_rows_spinbox = tkcw.CheckboxSliderSpinbox(
-            create_grid_popup,
-            label='How many rows? (1-16)',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=1,
-            max_value=16,
-            default_value=self.grid_rows,
-            row=0,
-            width=spinbox_width,
-            sticky='n')
-        self.grid_cols_spinbox = tkcw.CheckboxSliderSpinbox(
-            create_grid_popup,
-            label='How many columns? (1-24)',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=1,
-            max_value=24,
-            default_value=self.grid_cols,
-            row=1,
-            width=spinbox_width,
-            sticky='n')
-        self.grid_spacing_spinbox = tkcw.CheckboxSliderSpinbox(
-            create_grid_popup,
-            label='What is the spacing (um)?',
-            checkbox_enabled=False,
-            slider_enabled=False,
-            min_value=1,
-            max_value=20000,
-            default_value=self.grid_spacing_um,
-            row=2,
-            width=spinbox_width,
-            sticky='n')
-        # create button:
-        def create():
-            if hasattr(self, 'generate_grid_buttons_frame'):
-                self.generate_grid_buttons_frame.destroy()
-            # update attributes:
-            self.grid_rows = self.grid_rows_spinbox.value
-            self.grid_cols = self.grid_cols_spinbox.value
-            self.grid_spacing_um = self.grid_spacing_spinbox.value
-            # show user and reset state of grid buttons:
-            self.generate_grid_buttons(create_grid_popup, enabled=False)
-            self.set_grid_location_button.config(state='normal')
-            self.move_to_grid_location_button.config(state='disabled')
-            self.start_grid_preview_button.config(state='disabled')
-            # overwrite grid file:
-            with open(self.session_folder +
-                      "grid_navigator_parameters.txt", "w") as file:
-                file.write('rows:%i'%self.grid_rows + '\n')
-                file.write('columns:%i'%self.grid_cols + '\n')
-                file.write('spacing_um:%i'%self.grid_spacing_um + '\n')
-            return None
-        create_button = tk.Button(
-            create_grid_popup, text="Create",
-            command=create,
-            height=button_height, width=button_width)
-        create_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
-        create_button.bind( # force update
-            '<Enter>', lambda event: create_grid_popup.focus_set())
-        # exit button:
-        exit_button = tk.Button(
-            create_grid_popup, text="Exit",
-            command=create_grid_popup.destroy,
-            height=button_height, width=button_width)
-        exit_button.grid(row=4, column=0, padx=10, pady=10, sticky='n')
-        create()
-        return None
-
-    def set_grid_location(self):
-        set_grid_location_popup = tk.Toplevel()
-        set_grid_location_popup.title('Set current location')
-        set_grid_location_popup.grab_set() # force user to interact
-        x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
-        set_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
-        self.generate_grid_buttons(set_grid_location_popup)
-        self.set_running_mode('set_grid_location', enable=True)
-        def run_set_grid_location():
-            if self.running_set_grid_location.get():
-                for r in range(self.grid_rows):
-                    for c in range(self.grid_cols):
-                        if self.grid_button_enabled_array[r][c].get():
-                            # stop .after immediately:
-                            self.running_set_grid_location.set(0)
-                            set_grid_location_popup.destroy()
-                            # update grid:
-                            self.grid_location_rc = [r, c]
-                            self.update_grid_location()
-                            # get current position and spacing:
-                            XY_stage_position_mm = self.check_XY_stage()
-                            spacing_mm = self.grid_spacing_um / 1000
-                            # set home position:
-                            self.grid_home_mm = [
-                                XY_stage_position_mm[0] + c * spacing_mm,
-                                XY_stage_position_mm[1] - r * spacing_mm]
-                            # make grid of positions:
-                            self.grid_positions_mm = [[None for c in range(
-                                self.grid_cols)] for j in range(self.grid_rows)]
-                            for rows in range(self.grid_rows):
-                                for cols in range(self.grid_cols):
-                                    self.grid_positions_mm[rows][cols] = [
-                                        self.grid_home_mm[0] - cols*spacing_mm,
-                                        self.grid_home_mm[1] + rows*spacing_mm]
-                            # allow moves:
-                            self.move_to_grid_location_button.config(
-                                state='normal')
-                            self.start_grid_preview_button.config(
-                                    state='disabled')
-                            if self.grid_location_rc == [0, 0]:
-                                self.start_grid_preview_button.config(
-                                    state='normal')
-                            return None
-                self.root.after(self.gui_delay_ms, run_set_grid_location)
-            return None
-        run_set_grid_location()
-        return None
-
-    def update_grid_location(self):
-        name = '%s%i'%(chr(ord('@')+ self.grid_location_rc[0] + 1),
-                       self.grid_location_rc[1] + 1)
-        self.grid_location_textbox.textbox.delete('1.0', '10.0')
-        self.grid_location_textbox.textbox.insert('1.0', name)
-        return None
-
-    def move_to_grid_location(self):
-        move_to_grid_location_popup = tk.Toplevel()
-        move_to_grid_location_popup.title('Move to location')
-        move_to_grid_location_popup.grab_set() # force user to interact
-        x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
-        move_to_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
-        button_width, button_height = 25, 2
-        self.generate_grid_buttons(move_to_grid_location_popup)
-        r, c = self.grid_location_rc
-        self.grid_button_enabled_array[r][c].set(1)
-        self.grid_button_array[r][c].config(state='disabled')
-        self.set_running_mode('move_to_grid_location', enable=True)
-        # cancel button:
-        def cancel():
-            self.running_move_to_grid_location.set(0)
-            move_to_grid_location_popup.destroy()
-            return None
-        cancel_button = tk.Button(
-            move_to_grid_location_popup, text="Cancel",
-            command=cancel,
-            height=button_height, width=button_width)
-        cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')        
-        def run_move_to_grid_location():
-            if self.running_move_to_grid_location.get():
-                for r in range(self.grid_rows):
-                    for c in range(self.grid_cols):
-                        if (self.grid_button_enabled_array[r][c].get() and
-                            [r, c] != self.grid_location_rc):
-                            cancel() # stop .after immediately
-                            # update gui, apply and display:
-                            XY_stage_position_mm = self.grid_positions_mm[r][c]
-                            self.gui_xy_stage.update_position(
-                                XY_stage_position_mm)
-                            self.apply_settings(
-                                single_volume=True, check_XY_stage=False)
-                            self.last_acquire_task.join()# don't accumulate
-                            self.last_acquire_task = self.scope.acquire()
-                            # update attributes and buttons:
-                            self.grid_location_rc = [r, c]
-                            self.update_grid_location()
-                            self.start_grid_preview_button.config(
-                                state='disabled')
-                            if [r, c] == [0, 0]:
-                                self.start_grid_preview_button.config(
-                                    state='normal')
-                            return None
-                self.root.after(self.gui_delay_ms, run_move_to_grid_location)
-            return None
-        run_move_to_grid_location()
-        return None
-
-    def start_grid_preview(self):
-        print('\nGrid preview -> started')
-        self.set_running_mode('grid_preview', enable=True)
-        self.apply_settings(single_volume=True)
-        self.update_gui_settings_output()
-        folder_name = self.get_folder_name() + '_grid'
-        if self.tile_the_grid.get():
-            folder_name = self.get_folder_name() + '_grid_tile'
-            # get tile parameters:
-            self.tile_rows = self.tile_array_width_spinbox.value
-            self.tile_cols = self.tile_rows
-            # calculate move size:
-            self.tile_X_mm = 1e-3 * self.applied_settings[
-                'width_px'] * sols.sample_px_um
-            self.tile_Y_mm = 1e-3 * self.applied_settings['scan_range_um']            
-        # generate rows/cols list:
-        self.XY_grid_rc_list = []
-        for r in range(self.grid_rows):
-            for c in range(self.grid_cols):
-                if self.tile_the_grid.get():
-                    for tile_r in range(self.tile_rows):
-                        for tile_c in range(self.tile_cols):
-                            self.XY_grid_rc_list.append([r, c, tile_r, tile_c])
-                else:
-                    self.XY_grid_rc_list.append([r, c])
-        self.current_grid_image = 0
-        def run_grid_preview():
-            if self.tile_the_grid.get():
-                r, c, tile_r, tile_c = self.XY_grid_rc_list[
-                    self.current_grid_image]
-                name = '%s%i_r%ic%i'%(
-                    chr(ord('@')+r + 1), c + 1, tile_r, tile_c)
-                XY_stage_position_mm = [
-                    self.grid_positions_mm[r][c][0] - tile_c * self.tile_X_mm,
-                    self.grid_positions_mm[r][c][1] + tile_r * self.tile_Y_mm]
-                self.gui_xy_stage.update_position(XY_stage_position_mm)
-            else:
-                r, c = self.XY_grid_rc_list[self.current_grid_image]
-                name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
-                self.gui_xy_stage.update_position(self.grid_positions_mm[r][c])
-            filename = name + '.tif'
-            # update gui and move stage:
-            self.apply_settings(single_volume=True, check_XY_stage=False)
-            self.grid_location_rc = [r, c]
-            self.update_grid_location()
-            # check mode:
-            preview_only = True
-            if self.save_grid_data_and_position.get():
-                preview_only = False
-                self.update_position_list()
-            # get image:
-            self.scope.acquire(
-                filename=filename,
-                folder_name=folder_name,
-                description=self.description_textbox.text,
-                preview_only=preview_only).join()
-            grid_preview_filename = (folder_name + '\preview\\' + filename)
-            while not os.path.isfile(grid_preview_filename):
-                self.root.after(self.gui_delay_ms)
-            grid_image = imread(grid_preview_filename)
-            shape = grid_image.shape
-            # add reference:
-            grid_image = Image.fromarray(grid_image) # convert to ImageDraw 
-            XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
-            font_size = int(0.1 * min(shape))
-            font = ImageFont.truetype('arial.ttf', font_size)
-            ImageDraw.Draw(grid_image).text(XY, name, fill=0, font=font)
-            # make grid image:
-            if self.tile_the_grid.get():
-                if (r, c, tile_r, tile_c) == (0, 0, 0, 0):
-                    self.grid_preview = np.zeros(
-                        (self.grid_rows * shape[0] * self.tile_rows,
-                         self.grid_cols * shape[1] * self.tile_cols),
-                        'uint16')
-                self.grid_preview[
-                    (r * self.tile_rows + tile_r) * shape[0]:
-                    (r * self.tile_rows + tile_r + 1) * shape[0],
-                    (c * self.tile_cols + tile_c) * shape[1]:
-                    (c * self.tile_cols + tile_c + 1) * shape[1]
-                    ] = grid_image
-            else:
-                if (r, c) == (0, 0):
-                    self.grid_preview = np.zeros(
-                        (self.grid_rows * shape[0],
-                         self.grid_cols * shape[1]), 'uint16')
-                self.grid_preview[
-                    r * shape[0]:(r + 1) * shape[0],
-                    c * shape[1]:(c + 1) * shape[1]
-                    ] = grid_image
-            # display:
-            self.scope.display.show_grid_preview(self.grid_preview)
-            # check before re-run:
-            if (self.running_grid_preview.get() and
-                self.current_grid_image < len(self.XY_grid_rc_list) - 1): 
-                self.current_grid_image += 1
-                self.root.after(self.gui_delay_ms, run_grid_preview)
-            else:
-                print('Grid preview -> finished\n')
-            return None
-        run_grid_preview()
         return None
 
     def init_gui_tile_navigator(self):
