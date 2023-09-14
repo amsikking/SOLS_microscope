@@ -526,8 +526,8 @@ class GuiMicroscope:
         self.gui_settings()        # collects settings from GUI
         self.gui_settings_output() # shows output from settings
         self.gui_position_list()   # navigates position lists
-        self.init_gui_acquire()         # microscope methods
-        self.init_quit_button()
+        self.gui_acquire()         # microscope methods
+        self.quit_button()
         # grey out XYZ navigation buttons if not in scout mode:
         self.enable_XYZ_navigation_buttons(False)
         # get settings from gui:
@@ -555,56 +555,17 @@ class GuiMicroscope:
             self.session_folder = dt + 'sols_gui_session\\'
             os.makedirs(self.session_folder)
             # get scope ready:
-            self.loop_snoutfocus()
+            def run_snoutfocus():
+                if not self.running_acquire.get():
+                    self.scope.snoutfocus(settle_vibrations=False)
+                wait_ms = int(round(5 * 60 * 1e3))
+                self.root.after(wait_ms, run_snoutfocus)
+                return None
+            run_snoutfocus()
             self.last_acquire_task = self.scope.acquire() # snap a volume
-            self.running_scout.set(1)
-            self.init_scout_mode()
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
-
-    def loop_snoutfocus(self):
-        if not self.running_acquire.get():
-            self.scope.snoutfocus(settle_vibrations=False)
-        wait_ms = int(round(5 * 60 * 1e3))
-        self.root.after(wait_ms, self.loop_snoutfocus)
-        return None
-
-    def set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
-        # define mode dictionary:
-        mode_to_variable = {
-            'set_grid_location':self.running_set_grid_location,
-            'move_to_grid_location':self.running_move_to_grid_location,
-            'grid_preview':self.running_grid_preview,
-            'tile_preview':self.running_tile_preview,
-            'move_to_tile':self.running_move_to_tile,
-            'update_settings':self.running_update_settings,
-            'live':self.running_live,
-            'scout':self.running_scout,
-            'acquire':self.running_acquire
-            }
-        variable = mode_to_variable[mode]
-        # turn everything off except current mode:
-        for v in mode_to_variable.values():
-            if v != variable:
-                v.set(0)
-        # optionally enable the mode if not done by 'CheckButton':
-        if enable:
-            variable.set(1)
-        return None
-
-    def get_folder_name(self):
-        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
-        folder_index = 0
-        folder_name = (
-            self.session_folder + dt +
-            '%03i_'%folder_index + self.label_textbox.text)
-        while os.path.exists(folder_name): # check before overwriting
-            folder_index +=1
-            folder_name = (
-                self.session_folder + dt +
-                '%03i_'%folder_index + self.label_textbox.text)
-        return folder_name
 
     def gui_grid_navigator(self):
         grid_frame = tk.LabelFrame(
@@ -2033,6 +1994,467 @@ class GuiMicroscope:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
 
+    def gui_acquire(self):
+        self.acquire_frame = tk.LabelFrame(
+            self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
+        self.acquire_frame.grid(
+            row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
+        self.acquire_frame.bind( # force update
+            '<Enter>', lambda event: self.acquire_frame.focus_set())
+        button_width, button_height = 25, 2
+        bold_width_adjust = -3
+        spinbox_width = 20
+        # snap volume:
+        def snap_volume():
+            self.apply_settings(single_volume=True)
+            self.update_gui_settings_output()
+            self.last_acquire_task.join() # don't accumulate acquires
+            self.scope.acquire()
+            return None
+        snap_volume_button = tk.Button(
+            self.acquire_frame,
+            text="Snap volume",
+            command=snap_volume,
+            font=('Segoe UI', '10', 'bold'),
+            width=button_width + bold_width_adjust,
+            height=button_height)
+        snap_volume_button.grid(row=0, column=0, padx=10, pady=10)
+        snap_volume_button_tip = tix.Balloon(snap_volume_button)
+        snap_volume_button_tip.bind_widget(
+            snap_volume_button,
+            balloonmsg=(
+                "The 'Snap volume' button will apply the lastest \n" + 
+                "microscope settings and acquire a volume. This is \n" +
+                "useful for refreshing the display.\n" +
+                "NOTE: this does not save any data or position information."))
+        # live mode:
+        def live_mode():
+            def run_live_mode():
+                if self.running_live.get():
+                    self.apply_settings(
+                        single_volume=True, check_XY_stage=False)
+                    self.last_acquire_task.join() # don't accumulate acquires
+                    self.last_acquire_task = self.scope.acquire()
+                    self.root.after(self.gui_delay_ms, run_live_mode)
+                return None
+            self.set_running_mode('live')
+            self.apply_settings(single_volume=True)
+            self.update_gui_settings_output()
+            run_live_mode()
+            return None
+        self.running_live = tk.BooleanVar()
+        live_mode_button = tk.Checkbutton(
+            self.acquire_frame,
+            text='Live mode (On/Off)',
+            variable=self.running_live,
+            command=live_mode,
+            indicatoron=0,
+            font=('Segoe UI', '10', 'italic'),
+            width=button_width,
+            height=button_height)
+        live_mode_button.grid(row=1, column=0, padx=10, pady=10)
+        live_mode_button_tip = tix.Balloon(live_mode_button)
+        live_mode_button_tip.bind_widget(
+            live_mode_button,
+            balloonmsg=(
+                "The 'Live mode (On/Off)' button will enable/disable 'Live \n" + 
+                "mode'. 'Live mode' will continously apply the lastest \n" +
+                "microscope settings and acquire a volume.\n" +
+                "NOTE: this continously exposes the sample to light which \n" +
+                "may cause photobleaching/phototoxicity. To reduce this \n" +
+                "effect use 'Scout mode'.")) 
+        # scout mode:
+        def scout_mode():
+            self.set_running_mode('scout')
+            self.enable_XYZ_navigation_buttons(True)
+            self.apply_settings(single_volume=True)
+            self.update_gui_settings_output()        
+            if self.running_scout.get():
+                self.last_acquire_task.join() # don't accumulate acquires
+                self.last_acquire_task = self.scope.acquire()
+            def run_scout_mode():
+                if self.running_scout.get():
+                    def snap():
+                        self.apply_settings(
+                            single_volume=True, check_XY_stage=False)
+                        self.last_acquire_task.join() # don't accumulate
+                        self.last_acquire_task = self.scope.acquire()
+                    # Check Z:
+                    focus_piezo_z_um = self.gui_focus_piezo.position_um.value
+                    if self.applied_settings[
+                        'focus_piezo_z_um'] != focus_piezo_z_um:
+                        snap()
+                    # Check XY buttons:
+                    def update_XY_position(): # only called if button pressed
+                        self.XY_button_pressed = True
+                        # current position:
+                        XY_stage_position_mm = self.gui_xy_stage.position_mm
+                        # calculate move size:
+                        move_pct = self.gui_xy_stage.move_pct.value / 100
+                        scan_width_um = (
+                        self.applied_settings['width_px'] * sols.sample_px_um)
+                        ud_move_mm = (
+                            1e-3 * self.applied_settings[
+                                'scan_range_um'] * move_pct)
+                        lr_move_mm = 1e-3 * scan_width_um * move_pct
+                        # check which direction:
+                        if self.XY_stage_last_move == 'up (+Y)':
+                            move_mm = (0, ud_move_mm)
+                        if self.XY_stage_last_move == 'down (-Y)':
+                            move_mm = (0, -ud_move_mm)
+                        if self.XY_stage_last_move == 'left (-X)':
+                            move_mm = (-lr_move_mm, 0)
+                        if self.XY_stage_last_move == 'right (+X)':
+                            move_mm = (lr_move_mm, 0)
+                        # update position and gui:
+                        XY_stage_position_mm = tuple(map(sum, zip(
+                            XY_stage_position_mm, move_mm)))
+                        self.gui_xy_stage.update_position(XY_stage_position_mm)
+                        # toggle buttons back:
+                        self.gui_xy_stage.move_up.set(0)
+                        self.gui_xy_stage.move_down.set(0)
+                        self.gui_xy_stage.move_left.set(0)
+                        self.gui_xy_stage.move_right.set(0)
+                    # run minimal code for speed:
+                    self.XY_button_pressed = False
+                    if self.gui_xy_stage.move_up.get():
+                        self.XY_stage_last_move = 'up (+Y)'
+                        update_XY_position()
+                    elif self.gui_xy_stage.move_down.get():
+                        self.XY_stage_last_move = 'down (-Y)'
+                        update_XY_position()
+                    elif self.gui_xy_stage.move_left.get():
+                        self.XY_stage_last_move = 'left (-X)'
+                        update_XY_position()
+                    elif self.gui_xy_stage.move_right.get():
+                        self.XY_stage_last_move = 'right (+X)'
+                        update_XY_position()
+                    if self.XY_button_pressed:
+                        snap() # before gui update
+                        self.gui_xy_stage.update_last_move(
+                            self.XY_stage_last_move)
+                    # Check position buttons:
+                    def update_position(go_to): # only called if button pressed
+                        # check total and current position:
+                        total_positions  = self.total_positions_spinbox.value
+                        current_position = self.current_position_spinbox.value
+                        if total_positions == 0:
+                            return None
+                        self.position_button_pressed = True
+                        # check which direction:
+                        if go_to == 'start':
+                            new_position = 1
+                            if new_position == current_position:
+                                self.position_button_pressed = False
+                        if go_to == 'back':
+                            if current_position > 1:
+                                new_position = current_position - 1
+                            else:
+                                new_position = current_position
+                                self.position_button_pressed = False
+                        if go_to == 'forward':
+                            if current_position < total_positions:
+                                new_position = current_position + 1
+                            else:
+                                new_position = current_position
+                                self.position_button_pressed = False
+                        if go_to == 'end':
+                            new_position = total_positions
+                            if new_position == current_position:
+                                self.position_button_pressed = False
+                        if total_positions == 1: # refresh to the only position
+                            self.position_button_pressed = True
+                        index = new_position - 1
+                        # get positions:
+                        focus_piezo_z_um = (
+                            self.focus_piezo_position_list[index])
+                        XY_stage_position_mm = (
+                            self.XY_stage_position_list[index])
+                        # update gui:
+                        self.gui_focus_piezo.position_um.update_and_validate(
+                            focus_piezo_z_um)
+                        self.gui_xy_stage.update_position(XY_stage_position_mm)
+                        self.current_position_spinbox.update_and_validate(
+                            new_position)
+                        # toggle buttons back:
+                        self.move_to_start.set(0)
+                        self.move_back.set(0)
+                        self.move_forward.set(0)
+                        self.move_to_end.set(0)
+                    # run minimal code for speed:
+                    self.position_button_pressed = False
+                    if self.move_to_start.get():
+                        update_position('start')
+                    elif self.move_back.get():
+                        update_position('back')
+                    elif self.move_forward.get():
+                        update_position('forward')
+                    elif self.move_to_end.get():
+                        update_position('end')
+                    if self.position_button_pressed:
+                        snap()
+                    # Check XY joystick:
+                    XY_stage_position_mm = self.check_XY_stage()
+                    if self.XY_joystick_active:
+                        snap() # before gui update
+                        self.gui_xy_stage.update_last_move(
+                            self.XY_stage_last_move)
+                    else: # (avoids erroneous XY updates)
+                        self.gui_xy_stage.update_position(XY_stage_position_mm)
+                    self.root.after(self.gui_delay_ms, run_scout_mode)
+                else:
+                    self.enable_XYZ_navigation_buttons(False)
+                return None
+            run_scout_mode()
+            return None
+        self.running_scout = tk.BooleanVar()
+        scout_mode_button = tk.Checkbutton(
+            self.acquire_frame,
+            text='Scout mode (On/Off)',
+            variable=self.running_scout,
+            command=scout_mode,
+            indicatoron=0,
+            font=('Segoe UI', '10', 'bold', 'italic'),
+            fg='green',
+            width=button_width + bold_width_adjust,
+            height=button_height)
+        scout_mode_button.grid(row=2, column=0, padx=10, pady=10)
+        scout_mode_button_tip = tix.Balloon(scout_mode_button)
+        scout_mode_button_tip.bind_widget(
+            scout_mode_button,
+            balloonmsg=(
+                "The 'Scout mode (On/Off)' button will enable/disable \n" + 
+                "'Scout mode'. 'Scout mode' will only acquire a volume\n" +
+                "if XYZ motion is detected. This helps to reduce \n" +
+                "photobleaching/phototoxicity.\n" +
+                "NOTE: to reduce latency the microscope settings are only \n" +
+                "updated when a button from the 'ACQUIRE' panel is pressed \n" +
+                "(excluding 'Cancel acquire'). For example, you can use \n" +
+                "'Snap volume' to refresh the display with the latest \n" +
+                "settings."))
+        # save volume and position:
+        def save_volume_and_position():
+            self.apply_settings(single_volume=True)
+            self.update_position_list()
+            self.update_gui_settings_output()
+            folder_name = self.get_folder_name() + '_snap'
+            self.last_acquire_task.join() # don't accumulate acquires
+            self.scope.acquire(filename='snap.tif',
+                               folder_name=folder_name,
+                               description=self.description_textbox.text)
+            return None
+        save_volume_and_position_button = tk.Button(
+            self.acquire_frame,
+            text="Save volume and position",
+            command=save_volume_and_position,
+            font=('Segoe UI', '10', 'bold'),
+            fg='blue',
+            width=button_width + bold_width_adjust,
+            height=button_height)
+        save_volume_and_position_button.grid(row=3, column=0, padx=10, pady=10)
+        save_volume_and_position_tip = tix.Balloon(
+            save_volume_and_position_button)
+        save_volume_and_position_tip.bind_widget(
+            save_volume_and_position_button,
+            balloonmsg=(
+                "The 'Save volume and position' button will apply the \n" + 
+                "latest microscope settings, save a volume and add the \n" +
+                "current position to the position list."))
+        # run acquire:
+        def acquire():
+            print('\nAcquire -> started')
+            self.set_running_mode('acquire', enable=True)
+            self.apply_settings()
+            self.update_gui_settings_output()
+            self.folder_name = self.get_folder_name() + '_acquire'
+            self.description = self.description_textbox.text
+            self.acquire_count = 0
+            self.saved_delay_s = False
+            self.current_position = 0
+            self.total_positions = 0
+            if self.loop_over_position_list.get():
+                self.total_positions = len(self.XY_stage_position_list)
+            def run_acquire():
+                if not self.running_acquire.get(): # check for cancel
+                    return None
+                # don't launch all tasks: either wait 1 buffer time or delay:
+                wait_ms = int(round(1e3 * self.scope.buffer_time_s))
+                # check mode -> either single position or loop over positions:
+                if self.loop_over_position_list.get():
+                    if self.current_position == 0:
+                        self.loop_t0_s = time.perf_counter()
+                    self.gui_focus_piezo.position_um.update_and_validate(
+                        self.focus_piezo_position_list[self.current_position])
+                    self.gui_xy_stage.update_position(
+                        self.XY_stage_position_list[self.current_position])
+                    self.current_position_spinbox.update_and_validate(
+                        self.current_position + 1)
+                    self.apply_settings(check_XY_stage=False)
+                    self.scope.acquire(filename='%06i_p%06i.tif'%(
+                        self.acquire_count, self.current_position),
+                                       folder_name=self.folder_name,
+                                       description=self.description)
+                    if self.current_position < (self.total_positions - 1):
+                        self.current_position +=1
+                    else:
+                        self.current_position = 0
+                        self.acquire_count += 1
+                        loop_time_s = time.perf_counter() - self.loop_t0_s
+                        if self.delay_spinbox.value > loop_time_s:
+                            wait_ms = int(round(1e3 * (
+                                self.delay_spinbox.value - loop_time_s)))                   
+                else:
+                    self.scope.acquire(filename='%06i.tif'%self.acquire_count,
+                                       folder_name=self.folder_name,
+                                       description=self.description)
+                    self.acquire_count += 1
+                    if self.delay_spinbox.value > self.scope.buffer_time_s:
+                        wait_ms = int(round(1e3 * self.delay_spinbox.value))
+                # record gui delay:
+                if (not self.saved_delay_s and os.path.exists(
+                    self.folder_name)):
+                    with open(self.folder_name + '\\'  "gui_delay_s.txt",
+                              "w") as file:
+                        file.write(self.folder_name + '\n')
+                        file.write(
+                            'gui_delay_s: %i'%self.delay_spinbox.value + '\n')
+                        self.saved_delay_s = True
+                # check acquire count before re-run:
+                if self.acquire_count < self.acquire_number_spinbox.value:
+                    self.root.after(wait_ms, run_acquire)
+                else:
+                    self.scope.finish_all_tasks()
+                    self.running_acquire.set(0)
+                    print('Acquire -> finished\n')
+                return None
+            run_acquire()
+            return None
+        self.running_acquire = tk.BooleanVar()
+        run_acquire_button = tk.Button(
+            self.acquire_frame,
+            text="Run acquire",
+            command=acquire,
+            font=('Segoe UI', '10', 'bold'),
+            fg='red',
+            width=button_width + bold_width_adjust,
+            height=button_height)
+        run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
+        run_acquire_button_tip = tix.Balloon(run_acquire_button)
+        run_acquire_button_tip.bind_widget(
+            run_acquire_button,
+            balloonmsg=(
+                "The 'Run acquire' button will run a full acquisition \n" + 
+                "and may include: \n" +
+                "- multiple colors (enable with the 'TRANSMITTED LIGHT' \n" +
+                "and 'LASER BOX' panels).\n"
+                "- multiple positions (populate the 'POSITION LIST' and \n" +
+                "enable 'Loop over position list').\n"
+                "- multiple fast volumes per position (set 'Volumes per \n" +
+                "acquire' > 1).\n"
+                "- multiple iterations of the above (set 'Acquire number' \n" +
+                "> 1).\n"
+                "- a time delay between successive iterations of the above \n" +
+                "(set 'Inter-acquire delay (s)' > the time per iteration)"))
+        # cancel acquire:
+        def cancel_acquire():
+            self.running_acquire.set(0)
+            print('\n ***Acquire -> canceled*** \n')
+            return None
+        cancel_acquire_button = tk.Button(
+            self.acquire_frame,
+            text="Cancel acquire",
+            command=cancel_acquire,
+            width=button_width,
+            height=button_height)
+        cancel_acquire_button.grid(row=5, column=0, padx=10, pady=10)
+        cancel_acquire_button_tip = tix.Balloon(cancel_acquire_button)
+        cancel_acquire_button_tip.bind_widget(
+            cancel_acquire_button,
+            balloonmsg=(
+                "The 'Cancel acquire' button will cancel any ongoing \n" +
+                "acquisition.\n" +
+                "NOTE: this is not immediate since some processes must \n" +
+                "finish once launched."))
+        return None
+
+    def quit_button(self):
+        quit_frame = tk.LabelFrame(
+            self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
+        quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
+        quit_gui_button = tk.Button(
+            quit_frame,
+            text="EXIT GUI",
+            command=self.close,
+            height=2,
+            width=25)
+        quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
+        quit_gui_button_tip = tix.Balloon(quit_gui_button)
+        quit_gui_button_tip.bind_widget(
+            quit_gui_button,
+            balloonmsg=(
+                "The 'EXIT GUI' button will close down the microscope \n" +
+                "without errors. It's the right way the end the GUI session."))
+        return None
+
+    def enable_XYZ_navigation_buttons(self, enable): # pass True or False
+        state = 'normal'
+        if not enable: state = 'disabled'
+        # focus:
+        for child in self.gui_focus_piezo.position_um.winfo_children():
+            child.configure(state=state)
+        self.gui_focus_piezo.button_large_move_up.config(state=state)
+        self.gui_focus_piezo.button_small_move_up.config(state=state)
+        self.gui_focus_piezo.button_center_move.config(state=state)
+        self.gui_focus_piezo.button_small_move_down.config(state=state)
+        self.gui_focus_piezo.button_large_move_down.config(state=state)
+        # XY stage:
+        self.gui_xy_stage.button_up.config(state=state)
+        self.gui_xy_stage.button_down.config(state=state)
+        self.gui_xy_stage.button_left.config(state=state)
+        self.gui_xy_stage.button_right.config(state=state)
+        # position list:
+        self.move_to_start_button.config(state=state)
+        self.move_back_button.config(state=state)
+        self.move_forward_button.config(state=state)
+        self.move_to_end_button.config(state=state)
+        return None
+
+    def get_folder_name(self):
+        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+        folder_index = 0
+        folder_name = (
+            self.session_folder + dt +
+            '%03i_'%folder_index + self.label_textbox.text)
+        while os.path.exists(folder_name): # check before overwriting
+            folder_index +=1
+            folder_name = (
+                self.session_folder + dt +
+                '%03i_'%folder_index + self.label_textbox.text)
+        return folder_name
+
+    def set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
+        # define mode dictionary:
+        mode_to_variable = {
+            'set_grid_location':self.running_set_grid_location,
+            'move_to_grid_location':self.running_move_to_grid_location,
+            'grid_preview':self.running_grid_preview,
+            'tile_preview':self.running_tile_preview,
+            'move_to_tile':self.running_move_to_tile,
+            'update_settings':self.running_update_settings,
+            'live':self.running_live,
+            'scout':self.running_scout,
+            'acquire':self.running_acquire
+            }
+        variable = mode_to_variable[mode]
+        # turn everything off except current mode:
+        for v in mode_to_variable.values():
+            if v != variable:
+                v.set(0)
+        # optionally enable the mode if not done by 'CheckButton':
+        if enable:
+            variable.set(1)
+        return None
+
     def get_gui_settings(self):
         # collect settings from gui and re-format for '.scope.apply_settings'
         channels_per_slice, power_per_channel = [], []
@@ -2133,436 +2555,6 @@ class GuiMicroscope:
         for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
             self.applied_settings[k] = copy.deepcopy(gui_settings[k])
         if single_volume: self.applied_settings['volumes_per_buffer'] = 1
-        return None
-
-    def init_gui_acquire(self):
-        self.acquire_frame = tk.LabelFrame(
-            self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
-        self.acquire_frame.grid(
-            row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
-        self.acquire_frame.bind( # force update
-            '<Enter>', lambda event: self.acquire_frame.focus_set())
-        button_width, button_height = 25, 2
-        bold_width_adjust = -3
-        spinbox_width = 20
-        # snap volume:
-        snap_volume_button = tk.Button(
-            self.acquire_frame,
-            text="Snap volume",
-            command=self.snap_volume,
-            font=('Segoe UI', '10', 'bold'),
-            width=button_width + bold_width_adjust,
-            height=button_height)
-        snap_volume_button.grid(row=0, column=0, padx=10, pady=10)
-        snap_volume_button_tip = tix.Balloon(snap_volume_button)
-        snap_volume_button_tip.bind_widget(
-            snap_volume_button,
-            balloonmsg=(
-                "The 'Snap volume' button will apply the lastest \n" + 
-                "microscope settings and acquire a volume. This is \n" +
-                "useful for refreshing the display.\n" +
-                "NOTE: this does not save any data or position information."))
-        # live mode:
-        self.running_live = tk.BooleanVar()
-        live_mode_button = tk.Checkbutton(
-            self.acquire_frame,
-            text='Live mode (On/Off)',
-            variable=self.running_live,
-            command=self.init_live_mode,
-            indicatoron=0,
-            font=('Segoe UI', '10', 'italic'),
-            width=button_width,
-            height=button_height)
-        live_mode_button.grid(row=1, column=0, padx=10, pady=10)
-        live_mode_button_tip = tix.Balloon(live_mode_button)
-        live_mode_button_tip.bind_widget(
-            live_mode_button,
-            balloonmsg=(
-                "The 'Live mode (On/Off)' button will enable/disable 'Live \n" + 
-                "mode'. 'Live mode' will continously apply the lastest \n" +
-                "microscope settings and acquire a volume.\n" +
-                "NOTE: this continously exposes the sample to light which \n" +
-                "may cause photobleaching/phototoxicity. To reduce this \n" +
-                "effect use 'Scout mode'.")) 
-        # scout mode:
-        self.running_scout = tk.BooleanVar()
-        scout_mode_button = tk.Checkbutton(
-            self.acquire_frame,
-            text='Scout mode (On/Off)',
-            variable=self.running_scout,
-            command=self.init_scout_mode,
-            indicatoron=0,
-            font=('Segoe UI', '10', 'bold', 'italic'),
-            fg='green',
-            width=button_width + bold_width_adjust,
-            height=button_height)
-        scout_mode_button.grid(row=2, column=0, padx=10, pady=10)
-        scout_mode_button_tip = tix.Balloon(scout_mode_button)
-        scout_mode_button_tip.bind_widget(
-            scout_mode_button,
-            balloonmsg=(
-                "The 'Scout mode (On/Off)' button will enable/disable \n" + 
-                "'Scout mode'. 'Scout mode' will only acquire a volume\n" +
-                "if XYZ motion is detected. This helps to reduce \n" +
-                "photobleaching/phototoxicity.\n" +
-                "NOTE: to reduce latency the microscope settings are only \n" +
-                "updated when a button from the 'ACQUIRE' panel is pressed \n" +
-                "(excluding 'Cancel acquire'). For example, you can use \n" +
-                "'Snap volume' to refresh the display with the latest \n" +
-                "settings."))
-        # save volume and position:
-        save_volume_and_position_button = tk.Button(
-            self.acquire_frame,
-            text="Save volume and position",
-            command=self.save_volume_and_position,
-            font=('Segoe UI', '10', 'bold'),
-            fg='blue',
-            width=button_width + bold_width_adjust,
-            height=button_height)
-        save_volume_and_position_button.grid(row=3, column=0, padx=10, pady=10)
-        save_volume_and_position_tip = tix.Balloon(
-            save_volume_and_position_button)
-        save_volume_and_position_tip.bind_widget(
-            save_volume_and_position_button,
-            balloonmsg=(
-                "The 'Save volume and position' button will apply the \n" + 
-                "latest microscope settings, save a volume and add the \n" +
-                "current position to the position list."))
-        # run acquire:
-        self.running_acquire = tk.BooleanVar()
-        run_acquire_button = tk.Button(
-            self.acquire_frame,
-            text="Run acquire",
-            command=self.init_acquire,
-            font=('Segoe UI', '10', 'bold'),
-            fg='red',
-            width=button_width + bold_width_adjust,
-            height=button_height)
-        run_acquire_button.grid(row=4, column=0, padx=10, pady=10)
-        run_acquire_button_tip = tix.Balloon(run_acquire_button)
-        run_acquire_button_tip.bind_widget(
-            run_acquire_button,
-            balloonmsg=(
-                "The 'Run acquire' button will run a full acquisition \n" + 
-                "and may include: \n" +
-                "- multiple colors (enable with the 'TRANSMITTED LIGHT' \n" +
-                "and 'LASER BOX' panels).\n"
-                "- multiple positions (populate the 'POSITION LIST' and \n" +
-                "enable 'Loop over position list').\n"
-                "- multiple fast volumes per position (set 'Volumes per \n" +
-                "acquire' > 1).\n"
-                "- multiple iterations of the above (set 'Acquire number' \n" +
-                "> 1).\n"
-                "- a time delay between successive iterations of the above \n" +
-                "(set 'Inter-acquire delay (s)' > the time per iteration)"))
-        # cancel acquire:
-        cancel_acquire_button = tk.Button(
-            self.acquire_frame,
-            text="Cancel acquire",
-            command=self.cancel_acquire,
-            width=button_width,
-            height=button_height)
-        cancel_acquire_button.grid(row=5, column=0, padx=10, pady=10)
-        cancel_acquire_button_tip = tix.Balloon(cancel_acquire_button)
-        cancel_acquire_button_tip.bind_widget(
-            cancel_acquire_button,
-            balloonmsg=(
-                "The 'Cancel acquire' button will cancel any ongoing \n" +
-                "acquisition.\n" +
-                "NOTE: this is not immediate since some processes must \n" +
-                "finish once launched."))
-        return None
-
-    def snap_volume(self):
-        self.apply_settings(single_volume=True)
-        self.update_gui_settings_output()
-        self.last_acquire_task.join() # don't accumulate acquires
-        self.scope.acquire()
-        return None
-
-    def init_live_mode(self):
-        self.set_running_mode('live')
-        self.apply_settings(single_volume=True)
-        self.update_gui_settings_output()
-        self.run_live_mode()
-        return None
-
-    def run_live_mode(self):
-        if self.running_live.get():
-            self.apply_settings(single_volume=True, check_XY_stage=False)
-            self.last_acquire_task.join() # don't accumulate acquires
-            self.last_acquire_task = self.scope.acquire()
-            self.root.after(self.gui_delay_ms, self.run_live_mode)
-        return None
-
-    def enable_XYZ_navigation_buttons(self, enable): # pass True or False
-        state = 'normal'
-        if not enable: state = 'disabled'
-        # focus:
-        for child in self.gui_focus_piezo.position_um.winfo_children():
-            child.configure(state=state)
-        self.gui_focus_piezo.button_large_move_up.config(state=state)
-        self.gui_focus_piezo.button_small_move_up.config(state=state)
-        self.gui_focus_piezo.button_center_move.config(state=state)
-        self.gui_focus_piezo.button_small_move_down.config(state=state)
-        self.gui_focus_piezo.button_large_move_down.config(state=state)
-        # XY stage:
-        self.gui_xy_stage.button_up.config(state=state)
-        self.gui_xy_stage.button_down.config(state=state)
-        self.gui_xy_stage.button_left.config(state=state)
-        self.gui_xy_stage.button_right.config(state=state)
-        # position list:
-        self.move_to_start_button.config(state=state)
-        self.move_back_button.config(state=state)
-        self.move_forward_button.config(state=state)
-        self.move_to_end_button.config(state=state)
-        return None
-
-    def init_scout_mode(self):
-        self.set_running_mode('scout')
-        self.enable_XYZ_navigation_buttons(True)
-        self.apply_settings(single_volume=True)
-        self.update_gui_settings_output()        
-        if self.running_scout.get():
-            self.last_acquire_task.join() # don't accumulate acquires
-            self.last_acquire_task = self.scope.acquire()
-        self.run_scout_mode()
-        return None
-
-    def check_XY_buttons(self):
-        def update_XY_position(): # only called if button pressed
-            self.XY_button_pressed = True
-            # current position:
-            XY_stage_position_mm = self.gui_xy_stage.position_mm
-            # calculate move size:
-            move_pct = self.gui_xy_stage.move_pct.value / 100
-            scan_width_um = (
-            self.applied_settings['width_px'] * sols.sample_px_um)
-            ud_move_mm = (
-                1e-3 * self.applied_settings['scan_range_um'] * move_pct)
-            lr_move_mm = 1e-3 * scan_width_um * move_pct
-            # check which direction:
-            if self.XY_stage_last_move == 'up (+Y)':
-                move_mm = (0, ud_move_mm)
-            if self.XY_stage_last_move == 'down (-Y)':
-                move_mm = (0, -ud_move_mm)
-            if self.XY_stage_last_move == 'left (-X)':
-                move_mm = (-lr_move_mm, 0)
-            if self.XY_stage_last_move == 'right (+X)':
-                move_mm = (lr_move_mm, 0)
-            # update position and gui:
-            XY_stage_position_mm = tuple(map(sum, zip(
-                XY_stage_position_mm, move_mm)))
-            self.gui_xy_stage.update_position(XY_stage_position_mm)
-            # toggle buttons back:
-            self.gui_xy_stage.move_up.set(0)
-            self.gui_xy_stage.move_down.set(0)
-            self.gui_xy_stage.move_left.set(0)
-            self.gui_xy_stage.move_right.set(0)
-        # run minimal code for speed:
-        self.XY_button_pressed = False
-        if self.gui_xy_stage.move_up.get():
-            self.XY_stage_last_move = 'up (+Y)'
-            update_XY_position()
-        elif self.gui_xy_stage.move_down.get():
-            self.XY_stage_last_move = 'down (-Y)'
-            update_XY_position()
-        elif self.gui_xy_stage.move_left.get():
-            self.XY_stage_last_move = 'left (-X)'
-            update_XY_position()
-        elif self.gui_xy_stage.move_right.get():
-            self.XY_stage_last_move = 'right (+X)'
-            update_XY_position()
-        return None
-
-    def check_position_buttons(self):
-        def update_position(go_to): # only called if button pressed
-            # check total and current position:
-            total_positions  = self.total_positions_spinbox.value
-            current_position = self.current_position_spinbox.value
-            if total_positions == 0:
-                return None
-            self.position_button_pressed = True
-            # check which direction:
-            if go_to == 'start':
-                new_position = 1
-                if new_position == current_position:
-                    self.position_button_pressed = False
-            if go_to == 'back':
-                if current_position > 1:
-                    new_position = current_position - 1
-                else:
-                    new_position = current_position
-                    self.position_button_pressed = False
-            if go_to == 'forward':
-                if current_position < total_positions:
-                    new_position = current_position + 1
-                else:
-                    new_position = current_position
-                    self.position_button_pressed = False
-            if go_to == 'end':
-                new_position = total_positions
-                if new_position == current_position:
-                    self.position_button_pressed = False
-            if total_positions == 1: # refresh to the only position
-                self.position_button_pressed = True
-            index = new_position - 1
-            # get positions:
-            focus_piezo_z_um = self.focus_piezo_position_list[index]
-            XY_stage_position_mm = self.XY_stage_position_list[index]
-            # update gui:
-            self.gui_focus_piezo.position_um.update_and_validate(
-                focus_piezo_z_um)
-            self.gui_xy_stage.update_position(XY_stage_position_mm)
-            self.current_position_spinbox.update_and_validate(new_position)
-            # toggle buttons back:
-            self.move_to_start.set(0)
-            self.move_back.set(0)
-            self.move_forward.set(0)
-            self.move_to_end.set(0)
-        # run minimal code for speed:
-        self.position_button_pressed = False
-        if self.move_to_start.get():
-            update_position('start')
-        elif self.move_back.get():
-            update_position('back')
-        elif self.move_forward.get():
-            update_position('forward')
-        elif self.move_to_end.get():
-            update_position('end')
-        return None
-
-    def run_scout_mode(self):
-        if self.running_scout.get():
-            def snap():
-                self.apply_settings(single_volume=True, check_XY_stage=False)
-                self.last_acquire_task.join() # don't accumulate acquires
-                self.last_acquire_task = self.scope.acquire()
-            # Check Z:
-            focus_piezo_z_um = self.gui_focus_piezo.position_um.value
-            if self.applied_settings['focus_piezo_z_um'] != focus_piezo_z_um:
-                snap()
-            # Check XY buttons:
-            self.check_XY_buttons()
-            if self.XY_button_pressed:
-                snap() # before gui update
-                self.gui_xy_stage.update_last_move(self.XY_stage_last_move)
-            # Check position buttons:
-            self.check_position_buttons()
-            if self.position_button_pressed:
-                snap()
-            # Check XY joystick:
-            XY_stage_position_mm = self.check_XY_stage()
-            if self.XY_joystick_active:
-                snap() # before gui update
-                self.gui_xy_stage.update_last_move(self.XY_stage_last_move)
-            else: # (avoids erroneous XY updates)
-                self.gui_xy_stage.update_position(XY_stage_position_mm)
-            self.root.after(self.gui_delay_ms, self.run_scout_mode)
-        else:
-            self.enable_XYZ_navigation_buttons(False)
-        return None
-
-    def save_volume_and_position(self):
-        self.apply_settings(single_volume=True)
-        self.update_position_list()
-        self.update_gui_settings_output()
-        folder_name = self.get_folder_name() + '_snap'
-        self.last_acquire_task.join() # don't accumulate acquires
-        self.scope.acquire(filename='snap.tif',
-                           folder_name=folder_name,
-                           description=self.description_textbox.text)
-        return None
-
-    def init_acquire(self):
-        print('\nAcquire -> started')
-        self.set_running_mode('acquire', enable=True)
-        self.apply_settings()
-        self.update_gui_settings_output()
-        self.folder_name = self.get_folder_name() + '_acquire'
-        self.description = self.description_textbox.text
-        self.acquire_count = 0
-        self.saved_delay_s = False
-        self.current_position = 0
-        self.total_positions = 0
-        if self.loop_over_position_list.get():
-            self.total_positions = len(self.XY_stage_position_list)
-        self.run_acquire()
-        return None
-
-    def run_acquire(self):
-        if not self.running_acquire.get(): # check for cancel
-            return None
-        # don't launch all tasks: either wait 1 buffer time or apply delay:
-        wait_ms = int(round(1e3 * self.scope.buffer_time_s))
-        # check mode -> either single position or loop over positions:
-        if self.loop_over_position_list.get():
-            if self.current_position == 0:
-                self.loop_t0_s = time.perf_counter()
-            self.gui_focus_piezo.position_um.update_and_validate(
-                self.focus_piezo_position_list[self.current_position])
-            self.gui_xy_stage.update_position(
-                self.XY_stage_position_list[self.current_position])
-            self.current_position_spinbox.update_and_validate(
-                self.current_position + 1)
-            self.apply_settings(check_XY_stage=False)
-            self.scope.acquire(filename='%06i_p%06i.tif'%(
-                self.acquire_count, self.current_position),
-                               folder_name=self.folder_name,
-                               description=self.description)
-            if self.current_position < (self.total_positions - 1):
-                self.current_position +=1
-            else:
-                self.current_position = 0
-                self.acquire_count += 1
-                loop_time_s = time.perf_counter() - self.loop_t0_s
-                if self.delay_spinbox.value > loop_time_s:
-                    wait_ms = int(round(1e3 * (
-                        self.delay_spinbox.value - loop_time_s)))                   
-        else:
-            self.scope.acquire(filename='%06i.tif'%self.acquire_count,
-                               folder_name=self.folder_name,
-                               description=self.description)
-            self.acquire_count += 1
-            if self.delay_spinbox.value > self.scope.buffer_time_s:
-                wait_ms = int(round(1e3 * self.delay_spinbox.value))
-        # record gui delay:
-        if (not self.saved_delay_s and os.path.exists(self.folder_name)):
-            with open(self.folder_name + '\\'  "gui_delay_s.txt", "w") as file:
-                file.write(self.folder_name + '\n')
-                file.write('gui_delay_s: %i'%self.delay_spinbox.value + '\n')
-                self.saved_delay_s = True
-        # check acquire count before re-run:
-        if self.acquire_count < self.acquire_number_spinbox.value:
-            self.root.after(wait_ms, self.run_acquire)
-        else:
-            self.scope.finish_all_tasks()
-            self.running_acquire.set(0)
-            print('Acquire -> finished\n')
-        return None
-
-    def cancel_acquire(self):
-        self.running_acquire.set(0)
-        print('\n ***Acquire -> canceled*** \n')
-        return None
-
-    def init_quit_button(self):
-        quit_frame = tk.LabelFrame(
-            self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
-        quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
-        quit_gui_button = tk.Button(
-            quit_frame,
-            text="EXIT GUI",
-            command=self.close,
-            height=2,
-            width=25)
-        quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
-        quit_gui_button_tip = tix.Balloon(quit_gui_button)
-        quit_gui_button_tip.bind_widget(
-            quit_gui_button,
-            balloonmsg=(
-                "The 'EXIT GUI' button will close down the microscope \n" +
-                "without errors. It's the right way the end the GUI session."))
         return None
 
     def close(self):
