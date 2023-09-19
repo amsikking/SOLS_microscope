@@ -1135,31 +1135,30 @@ class GuiMicroscope:
             self.set_running_mode('tile_preview', enable=True)
             self.apply_settings(single_volume=True)
             self.update_gui_settings_output()
-            self.folder_name = self.get_folder_name() + '_tile'
+            folder_name = self.get_folder_name() + '_tile'
             # get tile parameters:
             self.tile_rows = self.tile_array_width_spinbox.value
             self.tile_cols = self.tile_rows
-            initial_XY_stage_position_mm = self.gui_xy_stage.position_mm
+            XY_home_mm = self.gui_xy_stage.position_mm
             # calculate move size:
             X_move_mm = 1e-3 * self.applied_settings[
                 'width_px'] * sols.sample_px_um
             Y_move_mm = 1e-3 * self.applied_settings['scan_range_um']
             # generate tile rows/cols and positions:
-            self.XY_tile_rc_list = []
-            self.XY_tile_position_list = []
+            self.tile_rc_list = []
+            self.tile_position_list = []
             for r in range(self.tile_rows):
                 for c in range(self.tile_cols):
-                    self.XY_tile_rc_list.append([r, c])
-                    XY_stage_position_mm = [
-                        initial_XY_stage_position_mm[0] - c * X_move_mm,
-                        initial_XY_stage_position_mm[1] + r * Y_move_mm]
-                    self.XY_tile_position_list.append(XY_stage_position_mm)
+                    self.tile_rc_list.append([r, c])
+                    self.tile_position_list.append(
+                        [XY_home_mm[0] - c * X_move_mm,
+                         XY_home_mm[1] + r * Y_move_mm])
             self.current_tile = 0
             def run_tile_preview():
                 # update position:
-                r, c = self.XY_tile_rc_list[self.current_tile]
+                r, c = self.tile_rc_list[self.current_tile]
                 self.gui_xy_stage.update_position(
-                    self.XY_tile_position_list[self.current_tile])
+                    self.tile_position_list[self.current_tile])
                 self.apply_settings(single_volume=True, check_XY_stage=False)
                 # get tile:
                 name = "r%ic%i"%(r, c)
@@ -1170,10 +1169,10 @@ class GuiMicroscope:
                     self.update_position_list()
                 self.scope.acquire(
                     filename=filename,
-                    folder_name=self.folder_name,
+                    folder_name=folder_name,
                     description=self.description_textbox.text,
                     preview_only=preview_only).join()
-                tile_filename = (self.folder_name + '\preview\\' + filename)
+                tile_filename = (folder_name + '\preview\\' + filename)
                 while not os.path.isfile(tile_filename):
                     self.root.after(self.gui_delay_ms)
                 tile = imread(tile_filename)
@@ -1185,7 +1184,7 @@ class GuiMicroscope:
                 font = ImageFont.truetype('arial.ttf', font_size)
                 ImageDraw.Draw(tile).text(XY, name, fill=0, font=font)
                 # make base image:
-                if (r, c) == (0, 0):
+                if self.current_tile == 0:
                     self.tile_preview = np.zeros(
                         (self.tile_rows * shape[0],
                          self.tile_cols * shape[1]), 'uint16')
@@ -1195,7 +1194,7 @@ class GuiMicroscope:
                 # display:
                 self.scope.display.show_tile_preview(self.tile_preview)
                 if (self.running_tile_preview.get() and
-                    self.current_tile < len(self.XY_tile_position_list) - 1): 
+                    self.current_tile < len(self.tile_position_list) - 1): 
                     self.current_tile += 1
                     self.root.after(self.gui_delay_ms, run_tile_preview)
                 else:
@@ -1245,6 +1244,15 @@ class GuiMicroscope:
                 "finish once launched."))        
         # move to tile:
         def move_to_tile():
+            def move(r, c):
+                self.current_tile = self.tile_rc_list.index([r, c])
+                self.gui_xy_stage.update_position(
+                    self.tile_position_list[self.current_tile])
+                self.apply_settings(single_volume=True, check_XY_stage=False)
+                self.last_acquire_task.join()# don't accumulate
+                self.last_acquire_task = self.scope.acquire()
+                cancel()
+                return None
             move_to_tile_popup = tk.Toplevel()
             move_to_tile_popup.title('Move to tile')
             move_to_tile_popup.grab_set() # force user to interact
@@ -1256,50 +1264,22 @@ class GuiMicroscope:
             tile_buttons_frame.grid(
                 row=0, column=1, rowspan=5, padx=10, pady=10)
             button_width, button_height = 5, 2
-            tile_button_array = [
-                [None for c in range(self.tile_cols)] for r in range(
-                    self.tile_rows)]
-            tile_button_enabled_array = [
-                [None for c in range(self.tile_cols)] for r in range(
-                    self.tile_rows)]
+            tile_button_array = [[None for c in range(
+                self.tile_cols)] for r in range(self.tile_rows)]
             for r in range(self.tile_rows):
                 for c in range(self.tile_cols):
-                    tile_button_enabled_array[r][c] = tk.BooleanVar()
-                    tile_button_array[r][c] = tk.Checkbutton(
+                    tile_button_array[r][c] = tk.Button(
                         tile_buttons_frame,
                         text='r%ic%i'%(r, c),
-                        variable=tile_button_enabled_array[r][c],
-                        indicatoron=0,
+                        command=lambda rows=r, cols=c: move(rows, cols),
                         width=button_width,
                         height=button_height)
                     tile_button_array[r][c].grid(
                         row=r, column=c, padx=10, pady=10)
             # set state:
-            r, c = self.XY_tile_rc_list[self.current_tile]
-            tile_button_enabled_array[r][c].set(1)
+            r, c = self.tile_rc_list[self.current_tile]
             tile_button_array[r][c].config(state='disabled')
             self.set_running_mode('move_to_tile', enable=True)
-            def run_move_to_tile():
-                if self.running_move_to_tile.get():
-                    for r in range(self.tile_rows):
-                        for c in range(self.tile_cols):
-                            if (tile_button_enabled_array[r][c].get() and
-                                [r, c] != self.XY_tile_rc_list[
-                                    self.current_tile]):
-                                cancel() # stop .after immediately:
-                                self.current_tile = self.XY_tile_rc_list.index(
-                                    [r, c])
-                                self.gui_xy_stage.update_position(
-                                    self.XY_tile_position_list[
-                                        self.current_tile])
-                                self.apply_settings(
-                                    single_volume=True, check_XY_stage=False)
-                                self.last_acquire_task.join()# don't accumulate
-                                self.last_acquire_task = self.scope.acquire()
-                                return None
-                    self.root.after(self.gui_delay_ms, run_move_to_tile)
-                return None
-            run_move_to_tile()
             # cancel button:
             def cancel():
                 self.running_move_to_tile.set(0)
