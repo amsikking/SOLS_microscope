@@ -1836,37 +1836,54 @@ class GuiMicroscope:
                 "positions currently stored in the position list (both in \n" +
                 "the GUI and the associated .txt files in the\n" +
                 "'sols_gui_session' folder."))
+        # utility function:
+        def update_position_and_snap(position):
+            if self.total_positions_spinbox.value != 0:
+                self.gui_focus_piezo.position_um.update_and_validate(
+                    self.focus_piezo_position_list[position - 1])
+                self.gui_xy_stage.update_position(
+                    self.XY_stage_position_list[position - 1])
+                self.current_position_spinbox.update_and_validate(position)
+                self.apply_settings(single_volume=True, check_XY_stage=False)
+                self.last_acquire_task.join() # don't accumulate
+                self.last_acquire_task = self.scope.acquire()
+            return None
         # move to start:
-        self.move_to_start = tk.BooleanVar()
-        self.move_to_start_button = tk.Checkbutton(
+        def move_to_start():
+            update_position_and_snap(1)
+            return None
+        move_to_start_button = tk.Button(
             self.positions_frame,
             text="Move to start",
-            variable=self.move_to_start,
-            indicatoron=0,
+            command=move_to_start,
             width=button_width,
             height=button_height)
-        self.move_to_start_button.grid(row=4, column=0, padx=10, pady=10)
-        move_to_start_button_tip = tix.Balloon(self.move_to_start_button)
+        move_to_start_button.grid(row=4, column=0, padx=10, pady=10)
+        move_to_start_button_tip = tix.Balloon(move_to_start_button)
         move_to_start_button_tip.bind_widget(
-            self.move_to_start_button,
+            move_to_start_button,
             balloonmsg=(
                 "The 'Move to start' button will move the 'FOCUS PIEZO' \n" + 
                 "and 'XY STAGE' to the first position in the position list.\n" +
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the start of the position list."))
         # move back:
-        self.move_back = tk.BooleanVar()
-        self.move_back_button = tk.Checkbutton(
+        def move_back():
+            new_position = self.current_position_spinbox.value - 1
+            if new_position < 1:
+                new_position = 1
+            update_position_and_snap(new_position)
+            return None
+        move_back_button = tk.Button(
             self.positions_frame,
             text="Move back (-1)",
-            variable=self.move_back,
-            indicatoron=0,
+            command=move_back,
             width=button_width,
             height=button_height)
-        self.move_back_button.grid(row=5, column=0, padx=10, pady=10)
-        move_back_button_tip = tix.Balloon(self.move_back_button)
+        move_back_button.grid(row=5, column=0, padx=10, pady=10)
+        move_back_button_tip = tix.Balloon(move_back_button)
         move_back_button_tip.bind_widget(
-            self.move_back_button,
+            move_back_button,
             balloonmsg=(
                 "The 'Move back (-1)' button will move the 'FOCUS PIEZO' \n" + 
                 "and 'XY STAGE' to the previous (n - 1) position in the \n" +
@@ -1898,18 +1915,22 @@ class GuiMicroscope:
                 "the joystick or 'XY STAGE' panel). Use one of the 'move' \n" +
                 "buttons to update if needed."))
         # go forwards:
-        self.move_forward = tk.BooleanVar()
-        self.move_forward_button = tk.Checkbutton(
+        def move_forward():
+            new_position = self.current_position_spinbox.value + 1
+            if new_position > self.total_positions_spinbox.value:
+                new_position = self.total_positions_spinbox.value
+            update_position_and_snap(new_position)
+            return None
+        move_forward_button = tk.Button(
             self.positions_frame,
             text="Move forward (+1)",
-            variable=self.move_forward,
-            indicatoron=0,
+            command=move_forward,
             width=button_width,
             height=button_height)
-        self.move_forward_button.grid(row=7, column=0, padx=10, pady=10)
-        move_forward_button_tip = tix.Balloon(self.move_forward_button)
+        move_forward_button.grid(row=7, column=0, padx=10, pady=10)
+        move_forward_button_tip = tix.Balloon(move_forward_button)
         move_forward_button_tip.bind_widget(
-            self.move_forward_button,
+            move_forward_button,
             balloonmsg=(
                 "The 'Move forward (+1)' button will move the 'FOCUS \n" + 
                 "PIEZO' and 'XY STAGE' to the next (n + 1) position in \n" +
@@ -1917,18 +1938,19 @@ class GuiMicroscope:
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the end of the position list."))
         # move to end:
-        self.move_to_end = tk.BooleanVar()
-        self.move_to_end_button = tk.Checkbutton(
+        def move_to_end():
+            update_position_and_snap(self.total_positions_spinbox.value)
+            return None
+        move_to_end_button = tk.Button(
             self.positions_frame,
             text="Move to end",
-            variable=self.move_to_end,
-            indicatoron=0,
+            command=move_to_end,
             width=button_width,
             height=button_height)
-        self.move_to_end_button.grid(row=8, column=0, padx=10, pady=10)
-        move_to_end_button_tip = tix.Balloon(self.move_to_end_button)
+        move_to_end_button.grid(row=8, column=0, padx=10, pady=10)
+        move_to_end_button_tip = tix.Balloon(move_to_end_button)
         move_to_end_button_tip.bind_widget(
-            self.move_to_end_button,
+            move_to_end_button,
             balloonmsg=(
                 "The 'Move to end' button will move the 'FOCUS PIEZO' \n" + 
                 "and 'XY STAGE' to the last position in the position list.\n" +
@@ -2094,66 +2116,6 @@ class GuiMicroscope:
                         snap() # before gui update
                         self.gui_xy_stage.update_last_move(
                             self.XY_stage_last_move)
-                    # Check position buttons:
-                    def update_position(go_to): # only called if button pressed
-                        # check total and current position:
-                        total_positions  = self.total_positions_spinbox.value
-                        current_position = self.current_position_spinbox.value
-                        if total_positions == 0:
-                            return None
-                        self.position_button_pressed = True
-                        # check which direction:
-                        if go_to == 'start':
-                            new_position = 1
-                            if new_position == current_position:
-                                self.position_button_pressed = False
-                        if go_to == 'back':
-                            if current_position > 1:
-                                new_position = current_position - 1
-                            else:
-                                new_position = current_position
-                                self.position_button_pressed = False
-                        if go_to == 'forward':
-                            if current_position < total_positions:
-                                new_position = current_position + 1
-                            else:
-                                new_position = current_position
-                                self.position_button_pressed = False
-                        if go_to == 'end':
-                            new_position = total_positions
-                            if new_position == current_position:
-                                self.position_button_pressed = False
-                        if total_positions == 1: # refresh to the only position
-                            self.position_button_pressed = True
-                        index = new_position - 1
-                        # get positions:
-                        focus_piezo_z_um = (
-                            self.focus_piezo_position_list[index])
-                        XY_stage_position_mm = (
-                            self.XY_stage_position_list[index])
-                        # update gui:
-                        self.gui_focus_piezo.position_um.update_and_validate(
-                            focus_piezo_z_um)
-                        self.gui_xy_stage.update_position(XY_stage_position_mm)
-                        self.current_position_spinbox.update_and_validate(
-                            new_position)
-                        # toggle buttons back:
-                        self.move_to_start.set(0)
-                        self.move_back.set(0)
-                        self.move_forward.set(0)
-                        self.move_to_end.set(0)
-                    # run minimal code for speed:
-                    self.position_button_pressed = False
-                    if self.move_to_start.get():
-                        update_position('start')
-                    elif self.move_back.get():
-                        update_position('back')
-                    elif self.move_forward.get():
-                        update_position('forward')
-                    elif self.move_to_end.get():
-                        update_position('end')
-                    if self.position_button_pressed:
-                        snap()
                     # Check XY joystick:
                     XY_stage_position_mm = self.check_XY_stage()
                     if self.XY_joystick_active:
@@ -2373,11 +2335,6 @@ class GuiMicroscope:
         self.gui_xy_stage.button_down.config(state=state)
         self.gui_xy_stage.button_left.config(state=state)
         self.gui_xy_stage.button_right.config(state=state)
-        # position list:
-        self.move_to_start_button.config(state=state)
-        self.move_back_button.config(state=state)
-        self.move_forward_button.config(state=state)
-        self.move_to_end_button.config(state=state)
         return None
 
     def get_folder_name(self):
