@@ -11,11 +11,76 @@ from PIL import Image, ImageDraw, ImageFont
 
 import sols_microscope as sols
 import tkinter_compound_widgets as tkcw
-from tifffile import imread, imwrite
+from tifffile import imread, imwrite        
 
-class GuiTransmittedLight:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='TRANSMITTED LIGHT', bd=6)
+class GuiMicroscope:
+    def __init__(self, init_microscope=True): # set False for GUI design...
+        self.init_microscope = init_microscope 
+        self.root = tix.Tk()
+        self.root.title('SOLS Microscope GUI')
+        # adjust font size and delay:
+        size = 10 # default = 9
+        font.nametofont("TkDefaultFont").configure(size=size)
+        font.nametofont("TkFixedFont").configure(size=size)
+        font.nametofont("TkTextFont").configure(size=size)
+        self.gui_delay_ms = int(1e3 * 1 / 30) # 30fps/video rate target
+        # load hardware GUI's:
+        self._init_transmitted_light()
+        self._init_laser_box()
+        self._init_dichroic_mirror()
+        self._init_filter_wheel()
+        self._init_camera()
+        self._init_galvo()
+        self._init_focus_piezo()
+        self._init_XY_stage()
+        # load microscope GUI's and quit:
+        self._init_grid_navigator()  # navigates an XY grid of points
+        self._init_tile_navigator()  # generates and navigates XY tiles
+        self._init_settings()        # collects settings from GUI
+        self._init_settings_output() # shows output from settings
+        self._init_position_list()   # navigates position lists
+        self._init_acquire()         # microscope methods
+        self._init_quit()
+        # grey out XYZ navigation buttons if not in scout mode:
+        self.enable_XYZ_navigation_buttons(False)
+        # get settings from gui:
+        gui_settings = self.get_gui_settings()
+        if init_microscope:
+            self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
+            # configure any hardware preferences:
+            self.scope.XY_stage.set_velocity(5, 5)            
+            # get XYZ direct from hardware and update gui to aviod motion:
+            focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
+            XY_stage_position_mm = [self.scope.XY_stage.x,
+                                    self.scope.XY_stage.y]
+            self.focus_piezo_z_um.update_and_validate(focus_piezo_z_um)
+            self.update_XY_stage_position(XY_stage_position_mm)
+            self.XY_joystick_active = False
+            self.XY_stage_last_move = 'None'
+            # init settings attributes:
+            self.applied_settings = {}
+            for k in gui_settings.keys():
+                self.applied_settings[k] = None
+            self.apply_settings(check_XY_stage=False) # mandatory call
+            # make session folder:
+            dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+            self.session_folder = dt + 'sols_gui_session\\'
+            os.makedirs(self.session_folder)
+            # get scope ready:
+            def run_snoutfocus():
+                if not self.running_acquire.get():
+                    self.scope.snoutfocus(settle_vibrations=False)
+                wait_ms = int(round(5 * 60 * 1e3))
+                self.root.after(wait_ms, run_snoutfocus)
+                return None
+            run_snoutfocus()
+            self.last_acquire_task = self.scope.acquire() # snap a volume
+        # start event loop:
+        self.root.mainloop() # blocks here until 'QUIT'
+        self.root.destroy()
+
+    def _init_transmitted_light(self):
+        frame = tk.LabelFrame(self.root, text='TRANSMITTED LIGHT', bd=6)
         frame.grid(row=1, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -24,17 +89,17 @@ class GuiTransmittedLight:
                 "The 'TRANSMITTED LIGHT' illuminates the sample from above.\n" +
                 "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 \n " +
                 "'LASER' must be selected."))
-        self.power = tkcw.CheckboxSliderSpinbox(
+        self.power_tl = tkcw.CheckboxSliderSpinbox(
             frame,
             label='470-850nm (%)',
             checkbox_default=True,
             slider_length=200,
             default_value=25,
             width=5)
+        return None
 
-class GuiLaserBox:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='LASER BOX', bd=6)
+    def _init_laser_box(self):
+        frame = tk.LabelFrame(self.root, text='LASER BOX', bd=6)
         frame.grid(row=2, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -43,14 +108,14 @@ class GuiLaserBox:
                 "The 'LASER' illuminates the sample with a 'light-sheet'.\n" +
                 "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 \n " +
                 "'LASER' must be selected."))
-        self.power405 = tkcw.CheckboxSliderSpinbox(
+        self.power_405 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='405nm (%)',
             color='magenta',
             slider_length=200,
             default_value=5,
             width=5)
-        self.power488 = tkcw.CheckboxSliderSpinbox(
+        self.power_488 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='488nm (%)',
             color='blue',
@@ -58,7 +123,7 @@ class GuiLaserBox:
             default_value=5,
             row=1,
             width=5)
-        self.power561 = tkcw.CheckboxSliderSpinbox(
+        self.power_561 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='561nm (%)',
             color='green',
@@ -66,7 +131,7 @@ class GuiLaserBox:
             default_value=5,
             row=2,
             width=5)
-        self.power640 = tkcw.CheckboxSliderSpinbox(
+        self.power_640 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='640nm (%)',
             color='red',
@@ -74,10 +139,10 @@ class GuiLaserBox:
             default_value=5,
             row=3,
             width=5)
+        return None
 
-class GuiDichroicMirror:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='DICHROIC MIRROR', bd=6)
+    def _init_dichroic_mirror(self):
+        frame = tk.LabelFrame(self.root, text='DICHROIC MIRROR', bd=6)
         frame.grid(row=3, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -90,18 +155,18 @@ class GuiDichroicMirror:
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
         self.dichroic_mirror_options = ( # copy paste from sols_microscope
             'ZT405/488/561/640rpc',)
-        self.current_dichroic_mirror = tk.StringVar()
-        self.current_dichroic_mirror.set('ZT405/488/561/640rpc') # set default
+        self.dichroic_mirror = tk.StringVar()
+        self.dichroic_mirror.set('ZT405/488/561/640rpc') # set default
         option_menu = tk.OptionMenu(
             inner_frame,
-            self.current_dichroic_mirror,
+            self.dichroic_mirror,
             *self.dichroic_mirror_options)
         option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)
+        return None
 
-class GuiFilterWheel:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='FILTER WHEEL', bd=6)
+    def _init_filter_wheel(self):
+        frame = tk.LabelFrame(self.root, text='FILTER WHEEL', bd=6)
         frame.grid(row=4, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -130,11 +195,11 @@ class GuiFilterWheel:
             self.emission_filter,
             *self.emission_filter_options)
         option_menu.config(width=46, height=2) # match to TL and lasers
-        option_menu.grid(row=0, column=0, padx=10, pady=10)        
+        option_menu.grid(row=0, column=0, padx=10, pady=10)
+        return None
 
-class GuiCamera:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='CAMERA', bd=6)
+    def _init_camera(self):
+        frame = tk.LabelFrame(self.root, text='CAMERA', bd=6)
         frame.grid(row=1, column=1, rowspan=2, padx=10, pady=10, sticky='n')
         self.illumination_time_us = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -204,10 +269,10 @@ class GuiCamera:
             row=1,
             column=1,
             fill='yellow')
+        return None
 
-class GuiGalvo:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='GALVO', bd=6)
+    def _init_galvo(self):
+        frame = tk.LabelFrame(self.root, text='GALVO', bd=6)
         frame.grid(row=3, column=1, rowspan=2, padx=10, pady=10, sticky='n')
         slider_length = 365 # match to camera
         button_width, button_height = 10, 2
@@ -323,10 +388,10 @@ class GuiGalvo:
             height=button_height)
         button_voxel_aspect_ratio_max.grid(
             row=3, column=0, padx=10, pady=10, sticky='e')
+        return None
 
-class GuiFocusPiezo:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='FOCUS PIEZO (Scout mode)', bd=6)
+    def _init_focus_piezo(self):
+        frame = tk.LabelFrame(self.root, text='FOCUS PIEZO (Scout mode)', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -340,7 +405,7 @@ class GuiFocusPiezo:
         position_center = int(round((position_max - position_min) / 2))
         large_move_um, small_move_um = 5, 1
         # slider:
-        self.position_um = tkcw.CheckboxSliderSpinbox(
+        self.focus_piezo_z_um = tkcw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
             orient='vertical',
@@ -356,8 +421,8 @@ class GuiFocusPiezo:
         self.button_large_move_up = tk.Button(
             frame,
             text="up %ium"%large_move_um,
-            command=lambda: self.position_um.update_and_validate(
-                self.position_um.value - large_move_um),
+            command=lambda: self.focus_piezo_z_um.update_and_validate(
+                self.focus_piezo_z_um.value - large_move_um),
             width=button_width,
             height=button_height)
         self.button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
@@ -365,8 +430,8 @@ class GuiFocusPiezo:
         self.button_small_move_up = tk.Button(
             frame,
             text="up %ium"%small_move_um,
-            command=lambda: self.position_um.update_and_validate(
-                self.position_um.value - small_move_um),
+            command=lambda: self.focus_piezo_z_um.update_and_validate(
+                self.focus_piezo_z_um.value - small_move_um),
             width=button_width,
             height=button_height)
         self.button_small_move_up.grid(row=1, column=1, sticky='s')
@@ -374,7 +439,7 @@ class GuiFocusPiezo:
         self.button_center_move = tk.Button(
             frame,
             text="center",
-            command=lambda: self.position_um.update_and_validate(
+            command=lambda: self.focus_piezo_z_um.update_and_validate(
                 position_center),
             width=button_width,
             height=button_height)
@@ -383,8 +448,8 @@ class GuiFocusPiezo:
         self.button_small_move_down = tk.Button(
             frame,
             text="down %ium"%small_move_um,
-            command=lambda: self.position_um.update_and_validate(
-                self.position_um.value + small_move_um),
+            command=lambda: self.focus_piezo_z_um.update_and_validate(
+                self.focus_piezo_z_um.value + small_move_um),
             width=button_width,
             height=button_height)
         self.button_small_move_down.grid(row=3, column=1, sticky='n')
@@ -392,15 +457,15 @@ class GuiFocusPiezo:
         self.button_large_move_down = tk.Button(
             frame,
             text="down %ium"%large_move_um,
-            command=lambda: self.position_um.update_and_validate(
-                self.position_um.value + large_move_um),
+            command=lambda: self.focus_piezo_z_um.update_and_validate(
+                self.focus_piezo_z_um.value + large_move_um),
             width=button_width,
             height=button_height)
         self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
+        return None
 
-class GuiXYStage:
-    def __init__(self, master):
-        frame = tk.LabelFrame(master, text='XY STAGE (Scout mode)', bd=6)
+    def _init_XY_stage(self):
+        frame = tk.LabelFrame(self.root, text='XY STAGE (Scout mode)', bd=6)
         frame.grid(row=3, column=2, rowspan=2, columnspan=2,
                    padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -473,7 +538,7 @@ class GuiXYStage:
             height=1,
             width=20)
         self.position.grid(row=1, column=1, padx=10, pady=10)
-        self.position_mm = None
+        self.XY_stage_position_mm = None
         # move size:
         self.move_pct = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -487,87 +552,21 @@ class GuiXYStage:
             row=4,
             columnspan=3,
             width=5)
+        return None
 
-    def update_last_move(self, text):
+    def update_XY_stage_last_move(self, text):
         self.last_move.textbox.delete('1.0', '10.0')
         self.last_move.textbox.insert('1.0', text)
         return None
 
-    def update_position(self, position_mm):
+    def update_XY_stage_position(self, XY_stage_position_mm):
         self.position.textbox.delete('1.0', '10.0')
-        self.position.textbox.insert(
-            '1.0', '[%0.3f, %0.3f]'%(position_mm[0], position_mm[1]))
-        self.position_mm = position_mm
+        self.position.textbox.insert('1.0', '[%0.3f, %0.3f]'%(
+            XY_stage_position_mm[0], XY_stage_position_mm[1]))
+        self.XY_stage_position_mm = XY_stage_position_mm
         return None
 
-class GuiMicroscope:
-    def __init__(self, init_microscope=True): # set False for GUI design...
-        self.init_microscope = init_microscope 
-        self.root = tix.Tk()
-        self.root.title('SOLS Microscope GUI')
-        # adjust font size and delay:
-        size = 10 # default = 9
-        font.nametofont("TkDefaultFont").configure(size=size)
-        font.nametofont("TkFixedFont").configure(size=size)
-        font.nametofont("TkTextFont").configure(size=size)
-        self.gui_delay_ms = int(1e3 * 1 / 30) # 30fps/video rate target
-        # load nested GUI's for each element:
-        self.gui_transmitted_light  = GuiTransmittedLight(self.root)
-        self.gui_laser_box          = GuiLaserBox(self.root)
-        self.gui_dichroic_mirror    = GuiDichroicMirror(self.root)
-        self.gui_filter_wheel       = GuiFilterWheel(self.root)
-        self.gui_galvo              = GuiGalvo(self.root)
-        self.gui_camera             = GuiCamera(self.root)
-        self.gui_focus_piezo        = GuiFocusPiezo(self.root)
-        self.gui_xy_stage           = GuiXYStage(self.root)
-        # load microscope GUI's and quit:
-        self.gui_grid_navigator()  # navigates an XY grid of points
-        self.gui_tile_navigator()  # generates and navigates XY tiles
-        self.gui_settings()        # collects settings from GUI
-        self.gui_settings_output() # shows output from settings
-        self.gui_position_list()   # navigates position lists
-        self.gui_acquire()         # microscope methods
-        self.quit_button()
-        # grey out XYZ navigation buttons if not in scout mode:
-        self.enable_XYZ_navigation_buttons(False)
-        # get settings from gui:
-        gui_settings = self.get_gui_settings()
-        if init_microscope:
-            self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
-            # configure any hardware preferences:
-            self.scope.XY_stage.set_velocity(5, 5)            
-            # get XYZ direct from hardware and update gui to aviod motion:
-            focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
-            XY_stage_position_mm = [self.scope.XY_stage.x,
-                                    self.scope.XY_stage.y]
-            self.gui_focus_piezo.position_um.update_and_validate(
-                focus_piezo_z_um)
-            self.gui_xy_stage.update_position(XY_stage_position_mm)
-            self.XY_joystick_active = False
-            self.XY_stage_last_move = 'None'
-            # init settings attributes:
-            self.applied_settings = {}
-            for k in gui_settings.keys():
-                self.applied_settings[k] = None
-            self.apply_settings(check_XY_stage=False) # mandatory call
-            # make session folder:
-            dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
-            self.session_folder = dt + 'sols_gui_session\\'
-            os.makedirs(self.session_folder)
-            # get scope ready:
-            def run_snoutfocus():
-                if not self.running_acquire.get():
-                    self.scope.snoutfocus(settle_vibrations=False)
-                wait_ms = int(round(5 * 60 * 1e3))
-                self.root.after(wait_ms, run_snoutfocus)
-                return None
-            run_snoutfocus()
-            self.last_acquire_task = self.scope.acquire() # snap a volume
-        # start event loop:
-        self.root.mainloop() # blocks here until 'QUIT'
-        self.root.destroy()
-
-    def gui_grid_navigator(self):
+    def _init_grid_navigator(self):
         grid_frame = tk.LabelFrame(
             self.root, text='GRID NAVIGATOR', bd=6)
         grid_frame.grid(
@@ -827,22 +826,17 @@ class GuiMicroscope:
         def move_to_grid_location():
             def move(r, c):
                 # update gui, apply and display:
-                XY_stage_position_mm = (
-                    self.grid_positions_mm[r][c])
-                self.gui_xy_stage.update_position(
-                    XY_stage_position_mm)
-                self.apply_settings(
-                    single_volume=True, check_XY_stage=False)
+                XY_stage_position_mm = self.grid_positions_mm[r][c]
+                self.update_XY_stage_position(XY_stage_position_mm)
+                self.apply_settings(single_volume=True, check_XY_stage=False)
                 self.last_acquire_task.join()# don't accumulate
                 self.last_acquire_task = self.scope.acquire()
                 # update attributes and buttons:
                 self.grid_location_rc = [r, c]
                 update_grid_location()
-                self.start_grid_preview_button.config(
-                    state='disabled')
+                self.start_grid_preview_button.config(state='disabled')
                 if [r, c] == [0, 0]:
-                    self.start_grid_preview_button.config(
-                        state='normal')
+                    self.start_grid_preview_button.config(state='normal')
                 # exit:
                 move_to_grid_location_popup.destroy()
                 return None
@@ -968,12 +962,11 @@ class GuiMicroscope:
                             tile_c * self.tile_X_mm),
                         self.grid_positions_mm[r][c][1] + (
                             tile_r * self.tile_Y_mm)]
-                    self.gui_xy_stage.update_position(XY_stage_position_mm)
+                    self.update_XY_stage_position(XY_stage_position_mm)
                 else:
                     r, c = self.XY_grid_rc_list[self.current_grid_image]
                     name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
-                    self.gui_xy_stage.update_position(
-                        self.grid_positions_mm[r][c])
+                    self.update_XY_stage_position(self.grid_positions_mm[r][c])
                 filename = name + '.tif'
                 # update gui and move stage:
                 self.apply_settings(single_volume=True, check_XY_stage=False)
@@ -1075,7 +1068,7 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def gui_tile_navigator(self):
+    def _init_tile_navigator(self):
         tile_frame = tk.LabelFrame(
             self.root, text='TILE NAVIGATOR', bd=6)
         tile_frame.grid(
@@ -1128,7 +1121,7 @@ class GuiMicroscope:
             # get tile parameters:
             self.tile_rows = self.tile_array_width_spinbox.value
             self.tile_cols = self.tile_rows
-            XY_home_mm = self.gui_xy_stage.position_mm
+            XY_home_mm = self.XY_stage_position_mm
             # calculate move size:
             X_move_mm = 1e-3 * self.applied_settings[
                 'width_px'] * sols.sample_px_um
@@ -1146,7 +1139,7 @@ class GuiMicroscope:
             def run_tile_preview():
                 # update position:
                 r, c = self.tile_rc_list[self.current_tile]
-                self.gui_xy_stage.update_position(
+                self.update_XY_stage_position(
                     self.tile_position_list[self.current_tile])
                 self.apply_settings(single_volume=True, check_XY_stage=False)
                 # get tile:
@@ -1235,7 +1228,7 @@ class GuiMicroscope:
         def move_to_tile():
             def move(r, c):
                 self.current_tile = self.tile_rc_list.index([r, c])
-                self.gui_xy_stage.update_position(
+                self.update_XY_stage_position(
                     self.tile_position_list[self.current_tile])
                 self.apply_settings(single_volume=True, check_XY_stage=False)
                 self.last_acquire_task.join()# don't accumulate
@@ -1291,7 +1284,7 @@ class GuiMicroscope:
                 "from the last tile routine."))
         return None
 
-    def gui_settings(self):
+    def _init_settings(self):
         self.settings_frame = tk.LabelFrame(
             self.root, text='SETTINGS (misc)', bd=6)
         self.settings_frame.grid(
@@ -1325,44 +1318,37 @@ class GuiMicroscope:
                 channels_per_slice.append(c.split("'")[1])
                 power_per_channel.append(int(powers[i]))
             # turn off all illumination:
-            self.gui_transmitted_light.power.checkbox_value.set(0)
-            self.gui_laser_box.power405.checkbox_value.set(0)
-            self.gui_laser_box.power488.checkbox_value.set(0)
-            self.gui_laser_box.power561.checkbox_value.set(0)
-            self.gui_laser_box.power640.checkbox_value.set(0)
+            self.power_tl.checkbox_value.set(0)
+            self.power_405.checkbox_value.set(0)
+            self.power_488.checkbox_value.set(0)
+            self.power_561.checkbox_value.set(0)
+            self.power_640.checkbox_value.set(0)
             # apply file settings to gui:
             for i, channel in enumerate(channels_per_slice):
                 if channel == 'LED':
-                    self.gui_transmitted_light.power.checkbox_value.set(1)
-                    self.gui_transmitted_light.power.update_and_validate(
-                        power_per_channel[i])
+                    self.power_tl.checkbox_value.set(1)
+                    self.power_tl.update_and_validate(power_per_channel[i])
                 if channel == '405':
-                    self.gui_laser_box.power405.checkbox_value.set(1)
-                    self.gui_laser_box.power405.update_and_validate(
-                        power_per_channel[i])
+                    self.power_405.checkbox_value.set(1)
+                    self.power_405.update_and_validate(power_per_channel[i])
                 if channel == '488':
-                    self.gui_laser_box.power488.checkbox_value.set(1)
-                    self.gui_laser_box.power488.update_and_validate(
-                        power_per_channel[i])
+                    self.power_488.checkbox_value.set(1)
+                    self.power_488.update_and_validate(power_per_channel[i])
                 if channel == '561':
-                    self.gui_laser_box.power561.checkbox_value.set(1)
-                    self.gui_laser_box.power561.update_and_validate(
-                        power_per_channel[i])
+                    self.power_561.checkbox_value.set(1)
+                    self.power_561.update_and_validate(power_per_channel[i])
                 if channel == '640':
-                    self.gui_laser_box.power640.checkbox_value.set(1)
-                    self.gui_laser_box.power640.update_and_validate(
-                        power_per_channel[i])
-            self.gui_filter_wheel.emission_filter.set(
-                file_settings['emission_filter'])
-            self.gui_camera.illumination_time_us.update_and_validate(
+                    self.power_640.checkbox_value.set(1)
+                    self.power_640.update_and_validate(power_per_channel[i])
+            self.emission_filter.set(file_settings['emission_filter'])
+            self.illumination_time_us.update_and_validate(
                 int(file_settings['illumination_time_us']))
-            self.gui_camera.height_px.update_and_validate(
-                int(file_settings['height_px']))
-            self.gui_camera.width_px.update_and_validate(
+            self.height_px.update_and_validate(int(file_settings['height_px']))
+            self.width_px.update_and_validate(
                 int(file_settings['width_px']))
-            self.gui_galvo.voxel_aspect_ratio.update_and_validate(
+            self.voxel_aspect_ratio.update_and_validate(
                 int(round(float(file_settings['voxel_aspect_ratio']))))
-            self.gui_galvo.scan_range_um.update_and_validate(
+            self.scan_range_um.update_and_validate(
                 int(round(float(file_settings['scan_range_um']))))
             self.volumes_spinbox.update_and_validate(
                 int(file_settings['volumes_per_buffer']))
@@ -1517,7 +1503,7 @@ class GuiMicroscope:
                 "run as fast as it can."))        
         return None
 
-    def gui_settings_output(self):
+    def _init_settings_output(self):
         self.output_frame = tk.LabelFrame(
             self.root, text='SETTINGS OUTPUT', bd=6)
         self.output_frame.grid(
@@ -1670,7 +1656,7 @@ class GuiMicroscope:
         self.min_time_textbox.textbox.insert('1.0', text)
         return None
 
-    def gui_position_list(self):
+    def _init_position_list(self):
         self.positions_frame = tk.LabelFrame(
             self.root, text='POSITION LIST (Scout mode)', bd=6)
         self.positions_frame.grid(
@@ -1839,9 +1825,9 @@ class GuiMicroscope:
         # utility function:
         def update_position_and_snap(position):
             if self.total_positions_spinbox.value != 0:
-                self.gui_focus_piezo.position_um.update_and_validate(
+                self.focus_piezo_z_um.update_and_validate(
                     self.focus_piezo_position_list[position - 1])
-                self.gui_xy_stage.update_position(
+                self.update_XY_stage_position(
                     self.XY_stage_position_list[position - 1])
                 self.current_position_spinbox.update_and_validate(position)
                 self.apply_settings(single_volume=True, check_XY_stage=False)
@@ -1977,7 +1963,7 @@ class GuiMicroscope:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
 
-    def gui_acquire(self):
+    def _init_acquire(self):
         self.acquire_frame = tk.LabelFrame(
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
         self.acquire_frame.grid(
@@ -2063,7 +2049,7 @@ class GuiMicroscope:
                         self.last_acquire_task.join() # don't accumulate
                         self.last_acquire_task = self.scope.acquire()
                     # Check Z:
-                    focus_piezo_z_um = self.gui_focus_piezo.position_um.value
+                    focus_piezo_z_um = self.focus_piezo_z_um.value
                     if self.applied_settings[
                         'focus_piezo_z_um'] != focus_piezo_z_um:
                         snap()
@@ -2071,9 +2057,9 @@ class GuiMicroscope:
                     def update_XY_position(): # only called if button pressed
                         self.XY_button_pressed = True
                         # current position:
-                        XY_stage_position_mm = self.gui_xy_stage.position_mm
+                        XY_stage_position_mm = self.XY_stage_position_mm
                         # calculate move size:
-                        move_pct = self.gui_xy_stage.move_pct.value / 100
+                        move_pct = self.move_pct.value / 100
                         scan_width_um = (
                         self.applied_settings['width_px'] * sols.sample_px_um)
                         ud_move_mm = (
@@ -2092,38 +2078,36 @@ class GuiMicroscope:
                         # update position and gui:
                         XY_stage_position_mm = tuple(map(sum, zip(
                             XY_stage_position_mm, move_mm)))
-                        self.gui_xy_stage.update_position(XY_stage_position_mm)
+                        self.update_XY_stage_position(XY_stage_position_mm)
                         # toggle buttons back:
-                        self.gui_xy_stage.move_up.set(0)
-                        self.gui_xy_stage.move_down.set(0)
-                        self.gui_xy_stage.move_left.set(0)
-                        self.gui_xy_stage.move_right.set(0)
+                        self.move_up.set(0)
+                        self.move_down.set(0)
+                        self.move_left.set(0)
+                        self.move_right.set(0)
                     # run minimal code for speed:
                     self.XY_button_pressed = False
-                    if self.gui_xy_stage.move_up.get():
+                    if self.move_up.get():
                         self.XY_stage_last_move = 'up (+Y)'
                         update_XY_position()
-                    elif self.gui_xy_stage.move_down.get():
+                    elif self.move_down.get():
                         self.XY_stage_last_move = 'down (-Y)'
                         update_XY_position()
-                    elif self.gui_xy_stage.move_left.get():
+                    elif self.move_left.get():
                         self.XY_stage_last_move = 'left (-X)'
                         update_XY_position()
-                    elif self.gui_xy_stage.move_right.get():
+                    elif self.move_right.get():
                         self.XY_stage_last_move = 'right (+X)'
                         update_XY_position()
                     if self.XY_button_pressed:
                         snap() # before gui update
-                        self.gui_xy_stage.update_last_move(
-                            self.XY_stage_last_move)
+                        self.update_XY_stage_last_move(self.XY_stage_last_move)
                     # Check XY joystick:
                     XY_stage_position_mm = self.check_XY_stage()
                     if self.XY_joystick_active:
                         snap() # before gui update
-                        self.gui_xy_stage.update_last_move(
-                            self.XY_stage_last_move)
+                        self.update_XY_stage_last_move(self.XY_stage_last_move)
                     else: # (avoids erroneous XY updates)
-                        self.gui_xy_stage.update_position(XY_stage_position_mm)
+                        self.update_XY_stage_position(XY_stage_position_mm)
                     self.root.after(self.gui_delay_ms, run_scout_mode)
                 else:
                     self.enable_XYZ_navigation_buttons(False)
@@ -2206,9 +2190,9 @@ class GuiMicroscope:
                 if self.loop_over_position_list.get():
                     if self.current_position == 0:
                         self.loop_t0_s = time.perf_counter()
-                    self.gui_focus_piezo.position_um.update_and_validate(
+                    self.focus_piezo_z_um.update_and_validate(
                         self.focus_piezo_position_list[self.current_position])
-                    self.gui_xy_stage.update_position(
+                    self.update_XY_stage_position(
                         self.XY_stage_position_list[self.current_position])
                     self.current_position_spinbox.update_and_validate(
                         self.current_position + 1)
@@ -2300,14 +2284,18 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def quit_button(self):
+    def _init_quit(self):
         quit_frame = tk.LabelFrame(
             self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
         quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
+        def close():
+            if self.init_microscope: self.scope.close()
+            self.root.quit()
+            return None        
         quit_gui_button = tk.Button(
             quit_frame,
             text="EXIT GUI",
-            command=self.close,
+            command=close,
             height=2,
             width=25)
         quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
@@ -2323,18 +2311,18 @@ class GuiMicroscope:
         state = 'normal'
         if not enable: state = 'disabled'
         # focus:
-        for child in self.gui_focus_piezo.position_um.winfo_children():
+        for child in self.focus_piezo_z_um.winfo_children():
             child.configure(state=state)
-        self.gui_focus_piezo.button_large_move_up.config(state=state)
-        self.gui_focus_piezo.button_small_move_up.config(state=state)
-        self.gui_focus_piezo.button_center_move.config(state=state)
-        self.gui_focus_piezo.button_small_move_down.config(state=state)
-        self.gui_focus_piezo.button_large_move_down.config(state=state)
+        self.button_large_move_up.config(state=state)
+        self.button_small_move_up.config(state=state)
+        self.button_center_move.config(state=state)
+        self.button_small_move_down.config(state=state)
+        self.button_large_move_down.config(state=state)
         # XY stage:
-        self.gui_xy_stage.button_up.config(state=state)
-        self.gui_xy_stage.button_down.config(state=state)
-        self.gui_xy_stage.button_left.config(state=state)
-        self.gui_xy_stage.button_right.config(state=state)
+        self.button_up.config(state=state)
+        self.button_down.config(state=state)
+        self.button_left.config(state=state)
+        self.button_right.config(state=state)
         return None
 
     def get_folder_name(self):
@@ -2373,38 +2361,38 @@ class GuiMicroscope:
     def get_gui_settings(self):
         # collect settings from gui and re-format for '.scope.apply_settings'
         channels_per_slice, power_per_channel = [], []
-        if self.gui_transmitted_light.power.checkbox_value.get():
+        if self.power_tl.checkbox_value.get():
             channels_per_slice.append('LED')
-            power_per_channel.append(self.gui_transmitted_light.power.value)
-        if self.gui_laser_box.power405.checkbox_value.get():
+            power_per_channel.append(self.power_tl.value)
+        if self.power_405.checkbox_value.get():
             channels_per_slice.append('405')
-            power_per_channel.append(self.gui_laser_box.power405.value)
-        if self.gui_laser_box.power488.checkbox_value.get():
+            power_per_channel.append(self.power_405.value)
+        if self.power_488.checkbox_value.get():
             channels_per_slice.append('488')
-            power_per_channel.append(self.gui_laser_box.power488.value)
-        if self.gui_laser_box.power561.checkbox_value.get():
+            power_per_channel.append(self.power_488.value)
+        if self.power_561.checkbox_value.get():
             channels_per_slice.append('561')
-            power_per_channel.append(self.gui_laser_box.power561.value)
-        if self.gui_laser_box.power640.checkbox_value.get():
+            power_per_channel.append(self.power_561.value)
+        if self.power_640.checkbox_value.get():
             channels_per_slice.append('640')
-            power_per_channel.append(self.gui_laser_box.power640.value)
+            power_per_channel.append(self.power_640.value)
         if len(channels_per_slice) == 0: # default TL if nothing selected
-            self.gui_transmitted_light.power.checkbox_value.set(1)
+            self.power_tl.checkbox_value.set(1)
             channels_per_slice = ('LED',)
-            power_per_channel = (self.gui_transmitted_light.power.value,)
+            power_per_channel = (self.power_tl.value,)
         # settings:
         gui_settings = {
             'channels_per_slice'  :channels_per_slice,
             'power_per_channel'   :power_per_channel,
-            'emission_filter'     :self.gui_filter_wheel.emission_filter.get(),
-            'illumination_time_us':self.gui_camera.illumination_time_us.value,
-            'height_px'           :self.gui_camera.height_px.value,
-            'width_px'            :self.gui_camera.width_px.value,
-            'voxel_aspect_ratio'  :self.gui_galvo.voxel_aspect_ratio.value,
-            'scan_range_um'       :self.gui_galvo.scan_range_um.value,
+            'emission_filter'     :self.emission_filter.get(),
+            'illumination_time_us':self.illumination_time_us.value,
+            'height_px'           :self.height_px.value,
+            'width_px'            :self.width_px.value,
+            'voxel_aspect_ratio'  :self.voxel_aspect_ratio.value,
+            'scan_range_um'       :self.scan_range_um.value,
             'volumes_per_buffer'  :self.volumes_spinbox.value,
-            'focus_piezo_z_um'    :self.gui_focus_piezo.position_um.value,
-            'XY_stage_position_mm':self.gui_xy_stage.position_mm}
+            'focus_piezo_z_um'    :self.focus_piezo_z_um.value,
+            'XY_stage_position_mm':self.XY_stage_position_mm}
         return gui_settings
 
     def check_XY_stage(self):
@@ -2429,8 +2417,8 @@ class GuiMicroscope:
     def apply_settings(self, single_volume=False, check_XY_stage=True):
         if check_XY_stage: # joystick used? If so update the gui:
             XY_stage_position_mm = self.check_XY_stage()
-            if XY_stage_position_mm != self.gui_xy_stage.position_mm:
-                self.gui_xy_stage.update_position(XY_stage_position_mm)
+            if XY_stage_position_mm != self.XY_stage_position_mm:
+                self.update_XY_stage_position(XY_stage_position_mm)
         gui_settings = self.get_gui_settings()
         new_settings = len(gui_settings)*[None] # pass 'None' if no change
         # check gui settings against applied settings:
@@ -2470,11 +2458,6 @@ class GuiMicroscope:
         for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
             self.applied_settings[k] = copy.deepcopy(gui_settings[k])
         if single_volume: self.applied_settings['volumes_per_buffer'] = 1
-        return None
-
-    def close(self):
-        if self.init_microscope: self.scope.close()
-        self.root.quit()
         return None
 
 if __name__ == '__main__':
