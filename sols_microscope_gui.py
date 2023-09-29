@@ -1,17 +1,20 @@
+# Imports from the python standard library:
 import os
 import time
-import copy
 from datetime import datetime
 import tkinter as tk
 from tkinter import font
 from tkinter import filedialog
 from tkinter import tix
+
+# Third party imports, installable via pip:
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from tifffile import imread, imwrite
 
-import sols_microscope as sols
-import tkinter_compound_widgets as tkcw
-from tifffile import imread, imwrite        
+# Our code, one .py file per module, copy files to your local directory:
+import sols_microscope as sols          # github.com/amsikking/sols_microscope
+import tkinter_compound_widgets as tkcw # github.com/amsikking/tkinter
 
 class GuiMicroscope:
     def __init__(self, init_microscope=True): # set False for GUI design...
@@ -25,48 +28,60 @@ class GuiMicroscope:
         font.nametofont("TkTextFont").configure(size=size)
         self.gui_delay_ms = int(1e3 * 1 / 30) # 30fps/video rate target
         # load hardware GUI's:
-        self._init_transmitted_light()
-        self._init_laser_box()
-        self._init_dichroic_mirror()
-        self._init_filter_wheel()
-        self._init_camera()
-        self._init_galvo()
-        self._init_focus_piezo()
-        self._init_XY_stage()
+        self.init_transmitted_light()
+        self.init_laser_box()
+        self.init_dichroic_mirror()
+        self.init_filter_wheel()
+        self.init_camera()
+        self.init_galvo()
+        self.init_focus_piezo()
+        self.init_XY_stage()
         # load microscope GUI's and quit:
-        self._init_grid_navigator()  # navigates an XY grid of points
-        self._init_tile_navigator()  # generates and navigates XY tiles
-        self._init_settings()        # collects settings from GUI
-        self._init_settings_output() # shows output from settings
-        self._init_position_list()   # navigates position lists
-        self._init_acquire()         # microscope methods
-        self._init_quit()
-        # grey out XYZ navigation buttons if not in scout mode:
-        self.enable_XYZ_navigation_buttons(False)
-        # get settings from gui:
-        gui_settings = self.get_gui_settings()
+        self.init_grid_navigator()  # navigates an XY grid of points
+        self.init_tile_navigator()  # generates and navigates XY tiles
+        self.init_settings()        # collects settings from GUI
+        self.init_settings_output() # shows output from settings
+        self.init_position_list()   # navigates position lists
+        self.init_acquire()         # microscope methods
+        self.init_quit()
+        # optionally initialize microscope:
         if init_microscope:
-            self.scope = sols.Microscope(max_allocated_bytes=100e9, ao_rate=1e4)
+            self.max_allocated_bytes = 100e9
+            self.scope = sols.Microscope(
+                max_allocated_bytes=self.max_allocated_bytes, ao_rate=1e4)
             # configure any hardware preferences:
-            self.scope.XY_stage.set_velocity(5, 5)            
+            self.scope.XY_stage.set_velocity(5, 5)
+            # make mandatory call to 'apply_settings':
+            self.scope.apply_settings(
+                channels_per_slice   = ('LED',),
+                power_per_channel    = (self.power_tl.value.get(),),
+                emission_filter      = self.emission_filter.get(),
+                illumination_time_us = self.illumination_time_us.value.get(),
+                height_px            = self.height_px.value.get(),
+                width_px             = self.width_px.value.get(),
+                voxel_aspect_ratio   = self.voxel_aspect_ratio.value.get(),
+                scan_range_um        = self.scan_range_um.value.get(),
+                volumes_per_buffer   = self.volumes_per_buffer.value.get(),
+                focus_piezo_z_um     = (0, 'relative'),
+                XY_stage_position_mm = (0, 0, 'relative')).join() # finish
             # get XYZ direct from hardware and update gui to aviod motion:
-            focus_piezo_z_um = int(round(self.scope.focus_piezo.z))
-            XY_stage_position_mm = [self.scope.XY_stage.x,
-                                    self.scope.XY_stage.y]
-            self.focus_piezo_z_um.update_and_validate(focus_piezo_z_um)
-            self.update_XY_stage_position(XY_stage_position_mm)
-            self.XY_joystick_active = False
-            self.XY_stage_last_move = 'None'
-            # init settings attributes:
-            self.applied_settings = {}
-            for k in gui_settings.keys():
-                self.applied_settings[k] = None
-            self.apply_settings(check_XY_stage=False) # mandatory call
-            # make session folder:
-            dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
-            self.session_folder = dt + 'sols_gui_session\\'
-            os.makedirs(self.session_folder)
-            # get scope ready:
+            self.focus_piezo_z_um.update_and_validate(
+                int(round(self.scope.focus_piezo.z)))
+            self._update_XY_stage_position(
+                [self.scope.XY_stage.x, self.scope.XY_stage.y])
+            # check microscope periodically:
+            def run_check_microscope():
+                self.scope.apply_settings().join() # update attributes
+                self.volumes_per_s.set(self.scope.volumes_per_s)
+                self.total_bytes.set(self.scope.total_bytes)
+                self.data_bytes.set(self.scope.bytes_per_data_buffer)
+                self.preview_bytes.set(self.scope.bytes_per_preview_buffer)
+                self.buffer_time_s.set(self.scope.buffer_time_s)
+                self._check_joystick()
+                self.root.after(self.gui_delay_ms, run_check_microscope)
+                return None
+            run_check_microscope()
+            # run snoutfocus periodically:
             def run_snoutfocus():
                 if not self.running_acquire.get():
                     self.scope.snoutfocus(settle_vibrations=False)
@@ -74,12 +89,56 @@ class GuiMicroscope:
                 self.root.after(wait_ms, run_snoutfocus)
                 return None
             run_snoutfocus()
-            self.last_acquire_task = self.scope.acquire() # snap a volume
+            # make session folder:
+            dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+            self.session_folder = dt + 'sols_gui_session\\'
+            os.makedirs(self.session_folder)
+            # snap a volume:
+            self.last_acquire_task = self.scope.acquire()
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
 
-    def _init_transmitted_light(self):
+    def _get_folder_name(self):
+        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+        folder_index = 0
+        folder_name = (
+            self.session_folder + dt +
+            '%03i_'%folder_index + self.label_textbox.text)
+        while os.path.exists(folder_name): # check before overwriting
+            folder_index +=1
+            folder_name = (
+                self.session_folder + dt +
+                '%03i_'%folder_index + self.label_textbox.text)
+        return folder_name
+
+    def _set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
+        # define mode dictionary:
+        mode_to_variable = {
+            'grid_preview':self.running_grid_preview,
+            'tile_preview':self.running_tile_preview,
+            'live':self.running_live_mode,
+            'scout':self.running_scout_mode,
+            'acquire':self.running_acquire
+            }
+        variable = mode_to_variable[mode]
+        # turn everything off except current mode:
+        for v in mode_to_variable.values():
+            if v != variable:
+                v.set(0)
+        # optionally enable the mode if not done by 'CheckButton':
+        if enable:
+            variable.set(1)
+        return None
+
+    def _snap_and_display(self):
+        if self.volumes_per_buffer.value.get() != 1:
+            self.volumes_per_buffer.update_and_validate(1)
+        self.last_acquire_task.join()# don't accumulate
+        self.last_acquire_task = self.scope.acquire()
+        return None
+
+    def init_transmitted_light(self):
         frame = tk.LabelFrame(self.root, text='TRANSMITTED LIGHT', bd=6)
         frame.grid(row=1, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -96,9 +155,13 @@ class GuiMicroscope:
             slider_length=200,
             default_value=25,
             width=5)
+        self.power_tl.checkbox_value.trace_add(
+            'write', self._apply_channel_settings)        
+        self.power_tl.value.trace_add(
+            'write', self._apply_channel_settings)
         return None
 
-    def _init_laser_box(self):
+    def init_laser_box(self):
         frame = tk.LabelFrame(self.root, text='LASER BOX', bd=6)
         frame.grid(row=2, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -108,6 +171,7 @@ class GuiMicroscope:
                 "The 'LASER' illuminates the sample with a 'light-sheet'.\n" +
                 "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 \n " +
                 "'LASER' must be selected."))
+        # 405:
         self.power_405 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='405nm (%)',
@@ -115,6 +179,11 @@ class GuiMicroscope:
             slider_length=200,
             default_value=5,
             width=5)
+        self.power_405.checkbox_value.trace_add(
+            'write', self._apply_channel_settings)        
+        self.power_405.value.trace_add(
+            'write', self._apply_channel_settings)
+        # 488:
         self.power_488 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='488nm (%)',
@@ -123,6 +192,11 @@ class GuiMicroscope:
             default_value=5,
             row=1,
             width=5)
+        self.power_488.checkbox_value.trace_add(
+            'write', self._apply_channel_settings)        
+        self.power_488.value.trace_add(
+            'write', self._apply_channel_settings)
+        # 561:
         self.power_561 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='561nm (%)',
@@ -131,6 +205,11 @@ class GuiMicroscope:
             default_value=5,
             row=2,
             width=5)
+        self.power_561.checkbox_value.trace_add(
+            'write', self._apply_channel_settings)        
+        self.power_561.value.trace_add(
+            'write', self._apply_channel_settings)
+        # 640:
         self.power_640 = tkcw.CheckboxSliderSpinbox(
             frame,
             label='640nm (%)',
@@ -139,9 +218,36 @@ class GuiMicroscope:
             default_value=5,
             row=3,
             width=5)
+        self.power_640.checkbox_value.trace_add(
+            'write', self._apply_channel_settings)        
+        self.power_640.value.trace_add(
+            'write', self._apply_channel_settings)
         return None
 
-    def _init_dichroic_mirror(self):
+    def _apply_channel_settings(self, var, index, mode):
+        # var, index, mode are passed from .trace_add but not used
+        channels_per_slice, power_per_channel = [], []
+        if self.power_tl.checkbox_value.get():
+            channels_per_slice.append('LED')
+            power_per_channel.append(self.power_tl.value.get())
+        if self.power_405.checkbox_value.get():
+            channels_per_slice.append('405')
+            power_per_channel.append(self.power_405.value.get())
+        if self.power_488.checkbox_value.get():
+            channels_per_slice.append('488')
+            power_per_channel.append(self.power_488.value.get())
+        if self.power_561.checkbox_value.get():
+            channels_per_slice.append('561')
+            power_per_channel.append(self.power_561.value.get())
+        if self.power_640.checkbox_value.get():
+            channels_per_slice.append('640')
+            power_per_channel.append(self.power_640.value.get())
+        if len(channels_per_slice) > 0: # at least 1 channel selected
+            self.scope.apply_settings(channels_per_slice=channels_per_slice,
+                                      power_per_channel=power_per_channel)
+        return None
+
+    def init_dichroic_mirror(self):
         frame = tk.LabelFrame(self.root, text='DICHROIC MIRROR', bd=6)
         frame.grid(row=3, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -153,19 +259,19 @@ class GuiMicroscope:
                 "Search the part number to see the specification."))
         inner_frame = tk.LabelFrame(frame, text='fixed')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
-        self.dichroic_mirror_options = ( # copy paste from sols_microscope
+        dichroic_mirror_options = ( # copy paste from sols_microscope
             'ZT405/488/561/640rpc',)
-        self.dichroic_mirror = tk.StringVar()
-        self.dichroic_mirror.set('ZT405/488/561/640rpc') # set default
+        dichroic_mirror = tk.StringVar()
+        dichroic_mirror.set('ZT405/488/561/640rpc') # set default
         option_menu = tk.OptionMenu(
             inner_frame,
-            self.dichroic_mirror,
-            *self.dichroic_mirror_options)
+            dichroic_mirror,
+            *dichroic_mirror_options)
         option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)
         return None
 
-    def _init_filter_wheel(self):
+    def init_filter_wheel(self):
         frame = tk.LabelFrame(self.root, text='FILTER WHEEL', bd=6)
         frame.grid(row=4, column=0, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -177,7 +283,7 @@ class GuiMicroscope:
                 "Search the part numbers to see the specifications."))
         inner_frame = tk.LabelFrame(frame, text='choice')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
-        self.emission_filter_options = ( # copy paste from sols_microscope
+        emission_filter_options = ( # copy paste from sols_microscope
             'Shutter',
             'Open',
             'ET450/50M',
@@ -193,14 +299,19 @@ class GuiMicroscope:
         option_menu = tk.OptionMenu(
             inner_frame,
             self.emission_filter,
-            *self.emission_filter_options)
+            *emission_filter_options)
         option_menu.config(width=46, height=2) # match to TL and lasers
         option_menu.grid(row=0, column=0, padx=10, pady=10)
+        self.emission_filter.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                emission_filter=self.emission_filter.get()))
         return None
 
-    def _init_camera(self):
+    def init_camera(self):
         frame = tk.LabelFrame(self.root, text='CAMERA', bd=6)
         frame.grid(row=1, column=1, rowspan=2, padx=10, pady=10, sticky='n')
+        # illumination_time_us:
         self.illumination_time_us = tkcw.CheckboxSliderSpinbox(
             frame,
             label='illumination time (us)',
@@ -213,6 +324,10 @@ class GuiMicroscope:
             row=0,
             width=10,
             sticky='w')
+        self.illumination_time_us.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                illumination_time_us=self.illumination_time_us.value.get()))
         illumination_time_us_tip = tix.Balloon(self.illumination_time_us)
         illumination_time_us_tip.bind_widget(
             self.illumination_time_us,
@@ -221,6 +336,7 @@ class GuiMicroscope:
                 "sample will be exposed to light (i.e. the camera will \n" +
                 "collect the emmitted light during this time).\n" +
                 "NOTE: the range in the GUI is 100us to 1000000us (1s)."))
+        # height_px:
         self.height_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='height pixels',
@@ -234,14 +350,19 @@ class GuiMicroscope:
             default_value=250,
             row=1,
             width=5)
-        self.height_px_tip = tix.Balloon(self.height_px)
-        self.height_px_tip.bind_widget(
+        self.height_px.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                height_px=self.height_px.value.get()))
+        height_px_tip = tix.Balloon(self.height_px)
+        height_px_tip.bind_widget(
             self.height_px,
             balloonmsg=(
                 "The 'height pixels' determines how many vertical pixels \n" +
                 "are used by the camera. Less pixels is a smaller field \n" +
                 "of view (FOV) and less data.\n" +
                 "NOTE: less vertical pixels speeds up the acquisition!"))
+        # width_px:
         self.width_px = tkcw.CheckboxSliderSpinbox(
             frame,
             label='width pixels',
@@ -255,13 +376,18 @@ class GuiMicroscope:
             column=1,
             sticky='s',
             width=5)
-        self.width_px_tip = tix.Balloon(self.width_px)
-        self.width_px_tip.bind_widget(
+        self.width_px.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                width_px=self.width_px.value.get()))
+        width_px_tip = tix.Balloon(self.width_px)
+        width_px_tip.bind_widget(
             self.width_px,
             balloonmsg=(
                 "The 'width pixels' determines how many horizontal pixels \n" +
                 "are used by the camera. Less pixels is a smaller field \n" +
                 "of view (FOV) and less data.\n"))
+        # ROI display:
         tkcw.CanvasRectangleSliderTrace2D(
             frame,
             self.width_px,
@@ -271,7 +397,7 @@ class GuiMicroscope:
             fill='yellow')
         return None
 
-    def _init_galvo(self):
+    def init_galvo(self):
         frame = tk.LabelFrame(self.root, text='GALVO', bd=6)
         frame.grid(row=3, column=1, rowspan=2, padx=10, pady=10, sticky='n')
         slider_length = 365 # match to camera
@@ -291,6 +417,10 @@ class GuiMicroscope:
             default_value=scan_range_um_center,
             row=0,
             width=5)
+        self.scan_range_um.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                scan_range_um=self.scan_range_um.value.get()))        
         scan_range_um_tip = tix.Balloon(self.scan_range_um)
         scan_range_um_tip.bind_widget(
             self.scan_range_um,
@@ -345,6 +475,10 @@ class GuiMicroscope:
             default_value=voxel_aspect_ratio_max,
             row=2,
             width=5)
+        self.voxel_aspect_ratio.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                voxel_aspect_ratio=self.voxel_aspect_ratio.value.get()))        
         voxel_aspect_ratio_tip = tix.Balloon(self.voxel_aspect_ratio)
         voxel_aspect_ratio_tip.bind_widget(
             self.voxel_aspect_ratio,
@@ -390,7 +524,7 @@ class GuiMicroscope:
             row=3, column=0, padx=10, pady=10, sticky='e')
         return None
 
-    def _init_focus_piezo(self):
+    def init_focus_piezo(self):
         frame = tk.LabelFrame(self.root, text='FOCUS PIEZO (Scout mode)', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -401,70 +535,88 @@ class GuiMicroscope:
                 "precisley adjusting the focus of the primary objective \n" +
                 "over a short range.\n" +
                 "NOTE: this is only active in 'Scout mode'"))
-        position_min, position_max = 0, 100
-        position_center = int(round((position_max - position_min) / 2))
-        large_move_um, small_move_um = 5, 1
+        min_um, max_um = 0, 100
+        small_move_um, large_move_um = 1, 5
+        center_um = int(round((max_um - min_um) / 2))
         # slider:
         self.focus_piezo_z_um = tkcw.CheckboxSliderSpinbox(
             frame,
             label='position (um)',
             orient='vertical',
             checkbox_enabled=False,
+            slider_fast_update=True,
             slider_length=460, # match to camera
             tickinterval=10,
-            min_value=position_min,
-            max_value=position_max,
+            min_value=min_um,
+            max_value=max_um,
             rowspan=5,
             width=5)
+        def move():
+            self.scope.apply_settings(
+                focus_piezo_z_um=(self.focus_piezo_z_um.value.get(),
+                                  'absolute'))
+            if self.running_scout_mode.get():
+                self._snap_and_display()
+            return None
+        self.focus_piezo_z_um.value.trace_add(
+            'write',
+            lambda var, index, mode: move())
+        def update_position(how):
+            # check current position:
+            z_um = self.focus_piezo_z_um.value.get()
+            # check which direction:
+            if how == 'large_up':     z_um -= large_move_um
+            if how == 'small_up':     z_um -= small_move_um
+            if how == 'center':       z_um  = center_um
+            if how == 'small_down':   z_um += small_move_um
+            if how == 'large_down':   z_um += large_move_um
+            # update:
+            self.focus_piezo_z_um.update_and_validate(z_um)
+            return None
         button_width, button_height = 10, 2
         # large up button:
-        self.button_large_move_up = tk.Button(
+        button_large_move_up = tk.Button(
             frame,
             text="up %ium"%large_move_um,
-            command=lambda: self.focus_piezo_z_um.update_and_validate(
-                self.focus_piezo_z_um.value - large_move_um),
+            command=lambda d='large_up': update_position(d),
             width=button_width,
             height=button_height)
-        self.button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
+        button_large_move_up.grid(row=0, column=1, padx=10, pady=10)
         # small up button:
-        self.button_small_move_up = tk.Button(
+        button_small_move_up = tk.Button(
             frame,
             text="up %ium"%small_move_um,
-            command=lambda: self.focus_piezo_z_um.update_and_validate(
-                self.focus_piezo_z_um.value - small_move_um),
+            command=lambda d='small_up': update_position(d),
             width=button_width,
             height=button_height)
-        self.button_small_move_up.grid(row=1, column=1, sticky='s')
+        button_small_move_up.grid(row=1, column=1, sticky='s')
         # center button:
-        self.button_center_move = tk.Button(
+        button_center_move = tk.Button(
             frame,
             text="center",
-            command=lambda: self.focus_piezo_z_um.update_and_validate(
-                position_center),
+            command=lambda d='center': update_position(d),
             width=button_width,
             height=button_height)
-        self.button_center_move.grid(row=2, column=1, padx=5, pady=5)
+        button_center_move.grid(row=2, column=1, padx=5, pady=5)
         # small down button:
-        self.button_small_move_down = tk.Button(
+        button_small_move_down = tk.Button(
             frame,
             text="down %ium"%small_move_um,
-            command=lambda: self.focus_piezo_z_um.update_and_validate(
-                self.focus_piezo_z_um.value + small_move_um),
+            command=lambda d='small_down': update_position(d),
             width=button_width,
             height=button_height)
-        self.button_small_move_down.grid(row=3, column=1, sticky='n')
+        button_small_move_down.grid(row=3, column=1, sticky='n')
         # large down button:
-        self.button_large_move_down = tk.Button(
+        button_large_move_down = tk.Button(
             frame,
             text="down %ium"%large_move_um,
-            command=lambda: self.focus_piezo_z_um.update_and_validate(
-                self.focus_piezo_z_um.value + large_move_um),
+            command=lambda d='large_down': update_position(d),
             width=button_width,
             height=button_height)
-        self.button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
+        button_large_move_down.grid(row=4, column=1, padx=10, pady=10)
         return None
 
-    def _init_XY_stage(self):
+    def init_XY_stage(self):
         frame = tk.LabelFrame(self.root, text='XY STAGE (Scout mode)', bd=6)
         frame.grid(row=3, column=2, rowspan=2, columnspan=2,
                    padx=10, pady=10, sticky='n')
@@ -482,65 +634,64 @@ class GuiMicroscope:
                 "determines how much the move buttons will move as a % \n" +
                 "of the current field of view (FOV).\n"
                 "NOTE: this is only active in 'Scout mode'"))
-        button_width, button_height = 10, 2
-        # up button:
-        self.move_up = tk.BooleanVar()
-        self.button_up = tk.Checkbutton(
+        # position:
+        self.XY_stage_position_mm = tk.StringVar()
+        def move():
+            self.scope.apply_settings(
+                XY_stage_position_mm=(self.X_stage_position_mm,
+                                      self.Y_stage_position_mm,
+                                      'absolute'))
+            return None
+        self.XY_stage_position_mm.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                XY_stage_position_mm=(self.X_stage_position_mm,
+                                      self.Y_stage_position_mm,
+                                      'absolute')))
+        # position textbox:
+        self.XY_stage_position_textbox = tkcw.Textbox(
             frame,
-            text="up",
-            variable=self.move_up,
-            indicatoron=0,
-            width=button_width,
-            height=button_height)
-        self.button_up.grid(row=0, column=1, padx=10, pady=10)
-        # down button:
-        self.move_down = tk.BooleanVar()
-        self.button_down = tk.Checkbutton(
-            frame,
-            text="down",
-            variable=self.move_down,
-            indicatoron=0,
-            width=button_width,
-            height=button_height)
-        self.button_down.grid(row=2, column=1, padx=10, pady=10)
-        # left button:
-        self.move_left = tk.BooleanVar()
-        self.button_left = tk.Checkbutton(
-            frame,
-            text="left",
-            variable=self.move_left,
-            indicatoron=0,
-            width=button_width,
-            height=button_height)
-        self.button_left.grid(row=1, column=0, padx=10, pady=10)
-        # right button:
-        self.move_right = tk.BooleanVar()
-        self.button_right = tk.Checkbutton(
-            frame,
-            text="right",
-            variable=self.move_right,
-            indicatoron=0,
-            width=button_width,
-            height=button_height)
-        self.button_right.grid(row=1, column=2, padx=10, pady=10)
+            label='[X, Y] position (mm)',
+            row=1,
+            column=1,
+            height=1,
+            width=20)
         # last move textbox:
-        self.last_move = tkcw.Textbox(
+        self.last_move = tk.StringVar()
+        last_move_textbox = tkcw.Textbox(
             frame,
             label='last move',
             default_text='None',
             height=1,
             width=10)
-        self.last_move.grid(row=0, column=0, padx=10, pady=10)
-        # position textbox:
-        self.position = tkcw.Textbox(
-            frame,
-            label='[X, Y] position (mm)',
-            height=1,
-            width=20)
-        self.position.grid(row=1, column=1, padx=10, pady=10)
-        self.XY_stage_position_mm = None
+        def update_last_move():
+            last_move_textbox.textbox.delete('1.0', '10.0')
+            last_move_textbox.textbox.insert('1.0', self.last_move.get())
+            return None
+        self.last_move.trace_add(
+            'write',
+            lambda var, index, mode: update_last_move())
+        def update_position(how):
+            # calculate move size:
+            move_factor = move_pct.value.get() / 100
+            ud_move_mm = 1e-3 * self.scan_range_um.value.get() * move_factor
+            scan_width_um = self.width_px.value.get() * sols.sample_px_um
+            lr_move_mm = 1e-3 * scan_width_um * move_factor
+            # check which direction:
+            if how == 'up (+Y)':       move_mm = (0,  ud_move_mm)
+            if how == 'down (-Y)':     move_mm = (0, -ud_move_mm)
+            if how == 'left (-X)':     move_mm = (-lr_move_mm, 0)
+            if how == 'right (+X)':    move_mm = (lr_move_mm, 0)
+            # update:
+            self.last_move.set(how)
+            self._update_XY_stage_position(
+                [self.X_stage_position_mm + move_mm[0],
+                 self.Y_stage_position_mm + move_mm[1]])
+            if self.running_scout_mode.get():
+                self._snap_and_display()
+            return None
         # move size:
-        self.move_pct = tkcw.CheckboxSliderSpinbox(
+        move_pct = tkcw.CheckboxSliderSpinbox(
             frame,
             label='step size (% of FOV)',
             checkbox_enabled=False,
@@ -552,27 +703,80 @@ class GuiMicroscope:
             row=4,
             columnspan=3,
             width=5)
+        button_width, button_height = 10, 2
+        # up button:
+        button_up = tk.Button(
+            frame,
+            text="up",
+            command=lambda d='up (+Y)': update_position(d),
+            width=button_width,
+            height=button_height)
+        button_up.grid(row=0, column=1, padx=10, pady=10)
+        # down button:
+        button_down = tk.Button(
+            frame,
+            text="down",
+            command=lambda d='down (-Y)': update_position(d),
+            width=button_width,
+            height=button_height)
+        button_down.grid(row=2, column=1, padx=10, pady=10)
+        # left button:
+        button_left = tk.Button(
+            frame,
+            text="left",
+            command=lambda d='left (-X)': update_position(d),
+            width=button_width,
+            height=button_height)
+        button_left.grid(row=1, column=0, padx=10, pady=10)
+        # right button:
+        button_right = tk.Button(
+            frame,
+            text="right",
+            command=lambda d='right (+X)': update_position(d),
+            width=button_width,
+            height=button_height)
+        button_right.grid(row=1, column=2, padx=10, pady=10)
         return None
 
-    def update_XY_stage_last_move(self, text):
-        self.last_move.textbox.delete('1.0', '10.0')
-        self.last_move.textbox.insert('1.0', text)
+    def _update_XY_stage_position(self, XY_stage_position_mm):
+        X, Y = XY_stage_position_mm[0], XY_stage_position_mm[1]
+        XY_string = '[%0.3f, %0.3f]'%(X, Y)
+        # textbox:
+        self.XY_stage_position_textbox.textbox.delete('1.0', '10.0')
+        self.XY_stage_position_textbox.textbox.insert('1.0', XY_string)
+        # attributes
+        self.X_stage_position_mm, self.Y_stage_position_mm = X, Y
+        self.XY_stage_position_mm.set(XY_string)
         return None
 
-    def update_XY_stage_position(self, XY_stage_position_mm):
-        self.position.textbox.delete('1.0', '10.0')
-        self.position.textbox.insert('1.0', '[%0.3f, %0.3f]'%(
-            XY_stage_position_mm[0], XY_stage_position_mm[1]))
-        self.XY_stage_position_mm = XY_stage_position_mm
+    def _check_joystick(self):
+        XY_mm = list(self.scope.XY_stage_position_mm)
+        joystick_active = False
+        if   XY_mm[0] == self.scope.XY_stage.x_min:
+            joystick_active = True
+            self.last_move.set('left (-X)')
+        elif XY_mm[0] == self.scope.XY_stage.x_max:
+            joystick_active = True
+            self.last_move.set('right (+X)')
+        elif XY_mm[1] == self.scope.XY_stage.y_min:
+            joystick_active = True
+            self.last_move.set('down (-Y)')
+        elif XY_mm[1] == self.scope.XY_stage.y_max:
+            joystick_active = True
+            self.last_move.set('up (+Y)')
+        if (joystick_active and self.running_scout_mode.get()):
+            self._snap_and_display()
+        if (not joystick_active and (
+            XY_mm[0] != self.X_stage_position_mm or
+            XY_mm[1] != self.Y_stage_position_mm)):
+            self._update_XY_stage_position(XY_mm)
         return None
 
-    def _init_grid_navigator(self):
+    def init_grid_navigator(self):
         grid_frame = tk.LabelFrame(
             self.root, text='GRID NAVIGATOR', bd=6)
         grid_frame.grid(
             row=1, column=4, rowspan=2, padx=10, pady=10, sticky='n')
-        grid_frame.bind( # force update
-            '<Enter>', lambda event: grid_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # set grid defaults:
@@ -623,9 +827,9 @@ class GuiMicroscope:
                 if hasattr(self, 'create_grid_buttons_frame'):
                     self.create_grid_buttons_frame.destroy()
                 # update attributes:
-                self.grid_rows = self.grid_rows_spinbox.value
-                self.grid_cols = self.grid_cols_spinbox.value
-                self.grid_spacing_um = self.grid_spacing_spinbox.value
+                self.grid_rows = self.grid_rows_spinbox.value.get()
+                self.grid_cols = self.grid_cols_spinbox.value.get()
+                self.grid_spacing_um = self.grid_spacing_spinbox.value.get()
                 # show grid buttons:
                 self.create_grid_buttons_frame = tk.LabelFrame(
                     create_grid_popup, text='XY GRID', bd=6)
@@ -702,8 +906,6 @@ class GuiMicroscope:
                 command=create,
                 height=button_height, width=button_width)
             create_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
-            create_button.bind( # force update
-                '<Enter>', lambda event: create_grid_popup.focus_set())
             # exit button:
             exit_button = tk.Button(
                 create_grid_popup, text="Exit",
@@ -735,11 +937,11 @@ class GuiMicroscope:
                 self.grid_location_rc = [r, c]
                 update_grid_location()
                 # get current position and spacing:
-                XY_stage_position_mm = self.check_XY_stage()
                 spacing_mm = self.grid_spacing_um / 1000
                 # set home position:
-                self.grid_home_mm = [XY_stage_position_mm[0] + c * spacing_mm,
-                                     XY_stage_position_mm[1] - r * spacing_mm]
+                self.grid_home_mm = [
+                    self.X_stage_position_mm + c * spacing_mm,
+                    self.Y_stage_position_mm - r * spacing_mm]
                 # make grid of positions:
                 self.grid_positions_mm = [
                     [None for c in range(
@@ -827,10 +1029,8 @@ class GuiMicroscope:
             def move(r, c):
                 # update gui, apply and display:
                 XY_stage_position_mm = self.grid_positions_mm[r][c]
-                self.update_XY_stage_position(XY_stage_position_mm)
-                self.apply_settings(single_volume=True, check_XY_stage=False)
-                self.last_acquire_task.join()# don't accumulate
-                self.last_acquire_task = self.scope.acquire()
+                self._update_XY_stage_position(XY_stage_position_mm)
+                self._snap_and_display()
                 # update attributes and buttons:
                 self.grid_location_rc = [r, c]
                 update_grid_location()
@@ -926,19 +1126,19 @@ class GuiMicroscope:
         # start grid preview:
         def start_grid_preview():
             print('\nGrid preview -> started')
-            self.set_running_mode('grid_preview', enable=True)
-            self.apply_settings(single_volume=True)
-            self.update_settings_output()
-            folder_name = self.get_folder_name() + '_grid'
+            self._set_running_mode('grid_preview', enable=True)
+            if self.volumes_per_buffer.value.get() != 1:
+                self.volumes_per_buffer.update_and_validate(1)
+            folder_name = self._get_folder_name() + '_grid'
             if self.tile_the_grid.get():
-                folder_name = self.get_folder_name() + '_grid_tile'
+                folder_name = self._get_folder_name() + '_grid_tile'
                 # get tile parameters:
-                self.tile_rows = self.tile_array_width_spinbox.value
+                self.tile_rows = self.tile_array_width_spinbox.value.get()
                 self.tile_cols = self.tile_rows
                 # calculate move size:
-                self.tile_X_mm = 1e-3 * self.applied_settings[
-                    'width_px'] * sols.sample_px_um
-                self.tile_Y_mm = 1e-3 * self.applied_settings['scan_range_um']
+                self.tile_X_mm = (
+                    1e-3 * self.width_px.value.get() * sols.sample_px_um)
+                self.tile_Y_mm = 1e-3 * self.scan_range_um.value.get()
             # generate rows/cols list:
             self.XY_grid_rc_list = []
             for r in range(self.grid_rows):
@@ -962,21 +1162,20 @@ class GuiMicroscope:
                             tile_c * self.tile_X_mm),
                         self.grid_positions_mm[r][c][1] + (
                             tile_r * self.tile_Y_mm)]
-                    self.update_XY_stage_position(XY_stage_position_mm)
+                    self._update_XY_stage_position(XY_stage_position_mm)
                 else:
                     r, c = self.XY_grid_rc_list[self.current_grid_image]
                     name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
-                    self.update_XY_stage_position(self.grid_positions_mm[r][c])
+                    self._update_XY_stage_position(self.grid_positions_mm[r][c])
                 filename = name + '.tif'
                 # update gui and move stage:
-                self.apply_settings(single_volume=True, check_XY_stage=False)
                 self.grid_location_rc = [r, c]
                 update_grid_location()
                 # check mode:
                 preview_only = True
                 if self.save_grid_data_and_position.get():
                     preview_only = False
-                    self.update_position_list()
+                    self._update_position_list()
                 # get image:
                 self.scope.acquire(
                     filename=filename,
@@ -1068,7 +1267,7 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def _init_tile_navigator(self):
+    def init_tile_navigator(self):
         tile_frame = tk.LabelFrame(
             self.root, text='TILE NAVIGATOR', bd=6)
         tile_frame.grid(
@@ -1114,18 +1313,16 @@ class GuiMicroscope:
         # start tile preview:
         def start_tile_preview():
             print('\nTile preview -> started')
-            self.set_running_mode('tile_preview', enable=True)
-            self.apply_settings(single_volume=True)
-            self.update_settings_output()
-            folder_name = self.get_folder_name() + '_tile'
+            self._set_running_mode('tile_preview', enable=True)
+            if self.volumes_per_buffer.value.get() != 1:
+                self.volumes_per_buffer.update_and_validate(1)
+            folder_name = self._get_folder_name() + '_tile'
             # get tile parameters:
-            self.tile_rows = self.tile_array_width_spinbox.value
+            self.tile_rows = self.tile_array_width_spinbox.value.get()
             self.tile_cols = self.tile_rows
-            XY_home_mm = self.XY_stage_position_mm
             # calculate move size:
-            X_move_mm = 1e-3 * self.applied_settings[
-                'width_px'] * sols.sample_px_um
-            Y_move_mm = 1e-3 * self.applied_settings['scan_range_um']
+            X_move_mm = 1e-3 * self.width_px.value.get() * sols.sample_px_um
+            Y_move_mm = 1e-3 * self.scan_range_um.value.get()
             # generate tile rows/cols and positions:
             self.tile_rc_list = []
             self.tile_position_list = []
@@ -1133,22 +1330,21 @@ class GuiMicroscope:
                 for c in range(self.tile_cols):
                     self.tile_rc_list.append([r, c])
                     self.tile_position_list.append(
-                        [XY_home_mm[0] - c * X_move_mm,
-                         XY_home_mm[1] + r * Y_move_mm])
+                        [self.X_stage_position_mm - c * X_move_mm,
+                         self.Y_stage_position_mm + r * Y_move_mm])
             self.current_tile = 0
             def run_tile_preview():
                 # update position:
                 r, c = self.tile_rc_list[self.current_tile]
-                self.update_XY_stage_position(
+                self._update_XY_stage_position(
                     self.tile_position_list[self.current_tile])
-                self.apply_settings(single_volume=True, check_XY_stage=False)
                 # get tile:
                 name = "r%ic%i"%(r, c)
                 filename = name + '.tif'
                 preview_only = True
                 if self.save_tile_data_and_position.get():
                     preview_only = False
-                    self.update_position_list()
+                    self._update_position_list()
                 self.scope.acquire(
                     filename=filename,
                     folder_name=folder_name,
@@ -1194,8 +1390,6 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         start_tile_preview_button.grid(row=2, column=0, padx=10, pady=10)
-        start_tile_preview_button.bind( # force update
-            '<Enter>', lambda event: start_tile_preview_button.focus_set())
         start_tile_tip = tix.Balloon(start_tile_preview_button)
         start_tile_tip.bind_widget(
             start_tile_preview_button,
@@ -1228,11 +1422,9 @@ class GuiMicroscope:
         def move_to_tile():
             def move(r, c):
                 self.current_tile = self.tile_rc_list.index([r, c])
-                self.update_XY_stage_position(
+                self._update_XY_stage_position(
                     self.tile_position_list[self.current_tile])
-                self.apply_settings(single_volume=True, check_XY_stage=False)
-                self.last_acquire_task.join()# don't accumulate
-                self.last_acquire_task = self.scope.acquire()
+                self._snap_and_display()
                 move_to_tile_popup.destroy()
                 return None
             move_to_tile_popup = tk.Toplevel()
@@ -1284,13 +1476,11 @@ class GuiMicroscope:
                 "from the last tile routine."))
         return None
 
-    def _init_settings(self):
+    def init_settings(self):
         self.settings_frame = tk.LabelFrame(
             self.root, text='SETTINGS (misc)', bd=6)
         self.settings_frame.grid(
             row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.settings_frame.bind( # force update
-            '<Enter>', lambda event: self.settings_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -1350,11 +1540,9 @@ class GuiMicroscope:
                 int(round(float(file_settings['voxel_aspect_ratio']))))
             self.scan_range_um.update_and_validate(
                 int(round(float(file_settings['scan_range_um']))))
-            self.volumes_spinbox.update_and_validate(
+            self.volumes_per_buffer.update_and_validate(
                 int(file_settings['volumes_per_buffer']))
-            # apply the file settings:
-            self.apply_settings(check_XY_stage=False)
-            return None        
+            return None
         load_from_file_button = tk.Button(
             self.settings_frame,
             text="Load from file",
@@ -1410,7 +1598,7 @@ class GuiMicroscope:
                 "file (along with the microscope settings for that \n" +
                 "acquisition). Describe what you are doing here."))        
         # volumes spinbox:
-        self.volumes_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.volumes_per_buffer = tkcw.CheckboxSliderSpinbox(
             self.settings_frame,
             label='Volumes per acquire',
             checkbox_enabled=False,
@@ -1420,9 +1608,13 @@ class GuiMicroscope:
             default_value=1,
             row=3,
             width=spinbox_width)
-        volumes_spinbox_tip = tix.Balloon(self.volumes_spinbox)
-        volumes_spinbox_tip.bind_widget(
-            self.volumes_spinbox,
+        self.volumes_per_buffer.value.trace_add(
+            'write',
+            lambda var, index, mode: self.scope.apply_settings(
+                volumes_per_buffer=self.volumes_per_buffer.value.get()))
+        volumes_per_buffer_tip = tix.Balloon(self.volumes_per_buffer)
+        volumes_per_buffer_tip.bind_widget(
+            self.volumes_per_buffer,
             balloonmsg=(
                 "In short: How many back to back (as fast as possible) \n" +
                 "volumes did you want for a given acquisition?\n" +
@@ -1503,166 +1695,145 @@ class GuiMicroscope:
                 "run as fast as it can."))        
         return None
 
-    def _init_settings_output(self):
+    def init_settings_output(self):
         self.output_frame = tk.LabelFrame(
             self.root, text='SETTINGS OUTPUT', bd=6)
         self.output_frame.grid(
             row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
-        self.output_frame.bind( # force update
-            '<Enter>', lambda event: self.output_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
-        # auto update settings button:
-        def update_settings():
-            def run_update_settings():
-                if self.running_update_settings.get():
-                    self.apply_settings(check_XY_stage=False)
-                    self.update_settings_output()
-                    self.root.after(self.gui_delay_ms, run_update_settings)
-                return None
-            self.set_running_mode('update_settings')
-            run_update_settings()
-            return None
-        self.running_update_settings = tk.BooleanVar()
-        update_settings_button = tk.Checkbutton(
-            self.output_frame,
-            text='Auto update (On/Off)',
-            variable=self.running_update_settings,
-            command=update_settings,
-            indicatoron=0,
-            font=('Segoe UI', '10', 'italic'),
-            width=button_width,
-            height=button_height)
-        update_settings_button.grid(row=0, column=0, padx=10, pady=10)
-        update_settings_button_tip = tix.Balloon(update_settings_button)
-        update_settings_button_tip.bind_widget(
-            update_settings_button,
-            balloonmsg=(
-                "Press 'Auto update (On/Off)' to continously apply the \n" +
-                "latest settings to the microscope and see how this \n" +
-                "affects the 'SETTINGS OUTPUT'.\n" +
-                "NOTE: selecting this mode will cancel other modes"))
         # volumes per second textbox:
-        self.volumes_per_s_textbox = tkcw.Textbox(
+        self.volumes_per_s = tk.IntVar()
+        volumes_per_s_textbox = tkcw.Textbox(
             self.output_frame,
             label='Volumes per second',
             default_text='None',
-            row=1,
+            row=0,
             width=spinbox_width,
             height=1)
-        volumes_per_s_textbox_tip = tix.Balloon(self.volumes_per_s_textbox)
+        def update_volumes_per_s():            
+            text = '%0.3f'%self.volumes_per_s.get()
+            volumes_per_s_textbox.textbox.delete('1.0', '10.0')
+            volumes_per_s_textbox.textbox.insert('1.0', text)
+            return None
+        self.volumes_per_s.trace_add(
+            'write',
+            lambda var, index, mode: update_volumes_per_s())
+        volumes_per_s_textbox_tip = tix.Balloon(volumes_per_s_textbox)
         volumes_per_s_textbox_tip.bind_widget(
-            self.volumes_per_s_textbox,
+            volumes_per_s_textbox,
             balloonmsg=(
                 "Shows the 'Volumes per second' (Vps) based on the \n" +
                 "settings that were last applied to the microscope.\n" +
                 "NOTE: this is the volumetric rate for the acquisition \n" +
                 "(i.e. during the analogue out 'play') and does reflect \n" +
-                "any delays or latency between acquisitions. This value \n" +
-                "is only updated when 'Auto update (On/Off)' is running \n" +
-                "or one of the 'ACQUIRE' buttons is pressed."))
+                "any delays or latency between acquisitions."))
         # total memory textbox:
-        self.total_memory_textbox = tkcw.Textbox(
+        self.total_bytes = tk.IntVar()
+        total_memory_textbox = tkcw.Textbox(
             self.output_frame,
             label='Total memory (GB)',
             default_text='None',
-            row=2,
+            row=1,
             width=spinbox_width,
             height=1)
-        total_memory_textbox_tip = tix.Balloon(self.total_memory_textbox)
+        def update_total_memory():
+            total_memory_gb = 1e-9 * self.total_bytes.get()
+            max_memory_gb = 1e-9 * self.max_allocated_bytes
+            memory_pct = 100 * total_memory_gb / max_memory_gb
+            text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
+            total_memory_textbox.textbox.delete('1.0', '10.0')
+            total_memory_textbox.textbox.insert('1.0', text)
+            return None
+        self.total_bytes.trace_add(
+            'write',
+            lambda var, index, mode: update_total_memory())
+        total_memory_textbox_tip = tix.Balloon(total_memory_textbox)
         total_memory_textbox_tip.bind_widget(
-            self.total_memory_textbox,
+            total_memory_textbox,
             balloonmsg=(
                 "Shows the 'Total memory (GB)' that the microscope will \n" +
                 "need to run the settings that were last applied.\n" +
                 "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding memory limits. This value is only updated when \n" +
-                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
-                "buttons is pressed."))
+                "avoiding memory limits."))
         # total storage textbox:
-        self.total_storage_textbox = tkcw.Textbox(
+        self.data_bytes = tk.IntVar()
+        self.preview_bytes = tk.IntVar()
+        total_storage_textbox = tkcw.Textbox(
             self.output_frame,
             label='Total storage (GB)',
             default_text='None',
-            row=3,
+            row=2,
             width=spinbox_width,
             height=1)
-        total_storage_textbox_tip = tix.Balloon(self.total_storage_textbox)
+        def update_total_storage():
+            positions = 1
+            if self.loop_over_position_list.get():
+                positions = max(len(self.XY_stage_position_list), 1)
+            acquires = self.acquire_number_spinbox.value.get()
+            data_gb = 1e-9 * self.data_bytes.get()
+            preview_gb = 1e-9 * self.preview_bytes.get()
+            total_storage_gb = (data_gb + preview_gb) * positions * acquires
+            text = '%0.3f'%total_storage_gb
+            total_storage_textbox.textbox.delete('1.0', '10.0')
+            total_storage_textbox.textbox.insert('1.0', text)
+            return None
+        self.data_bytes.trace_add(
+            'write',
+            lambda var, index, mode: update_total_storage())
+        total_storage_textbox_tip = tix.Balloon(total_storage_textbox)
         total_storage_textbox_tip.bind_widget(
-            self.total_storage_textbox,
+            total_storage_textbox,
             balloonmsg=(
                 "Shows the 'Total storage (GB)' that the microscope will \n" +
                 "need to save the data if 'Run acquire' is pressed (based \n" +
                 "on the settings that were last applied).\n" +
                 "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding storage limits. This value is only updated when \n" +
-                "'Auto update (On/Off)' is running or one of the 'ACQUIRE' \n" +
-                "buttons is pressed."))
+                "avoiding storage limits."))
         # min time textbox:
-        self.min_time_textbox = tkcw.Textbox(
+        self.buffer_time_s = tk.DoubleVar()
+        min_time_textbox = tkcw.Textbox(
             self.output_frame,
             label='Minimum acquire time (s)',
             default_text='None',
-            row=4,
+            row=3,
             width=spinbox_width,
             height=1)
-        total_storage_textbox_tip = tix.Balloon(self.min_time_textbox)
-        total_storage_textbox_tip.bind_widget(
-            self.min_time_textbox,
+        def update_min_time():
+            positions = 1
+            if self.loop_over_position_list.get():
+                positions = max(len(self.XY_stage_position_list), 1)
+            acquires = self.acquire_number_spinbox.value.get()
+            min_acquire_time_s = self.buffer_time_s.get() * positions
+            min_total_time_s = min_acquire_time_s * acquires
+            if self.delay_spinbox.value.get() > min_acquire_time_s:
+                min_total_time_s = (self.delay_spinbox.value.get() * (
+                    acquires - 1) + min_acquire_time_s)
+            text = '%0.6f (%0.0f min)'%(
+                min_total_time_s, (min_total_time_s / 60))
+            min_time_textbox.textbox.delete('1.0', '10.0')
+            min_time_textbox.textbox.insert('1.0', text)
+            return None
+        self.buffer_time_s.trace_add(
+            'write',
+            lambda var, index, mode: update_min_time())
+        min_time_textbox_tip = tix.Balloon(min_time_textbox)
+        min_time_textbox_tip.bind_widget(
+            min_time_textbox,
             balloonmsg=(
                 "Shows the 'Minimum acquire time (s)' that the microscope \n" +
                 "will need if 'Run acquire' is pressed (based on the \n" +
                 "settings that were last applied).\n" +
                 "NOTE: this value does not take into account the \n" +
                 "'move time' when using the 'Loop over position list' \n" +
-                "option (so the actual time will be significantly more). \n" +
-                "This value is only updated when 'Auto update (On/Off)' is \n" +
-                "running or one of the 'ACQUIRE' buttons is pressed\n"))
+                "option (so the actual time will be significantly more)."))
         return None
 
-    def update_settings_output(self):
-        self.scope.apply_settings().join() # update attributes
-        # volumes per second:
-        text = '%0.3f'%self.scope.volumes_per_s
-        self.volumes_per_s_textbox.textbox.delete('1.0', '10.0')
-        self.volumes_per_s_textbox.textbox.insert('1.0', text)
-        # calculate memory:
-        total_memory_gb = 1e-9 * self.scope.total_bytes
-        max_memory_gb = 1e-9 * self.scope.max_allocated_bytes
-        memory_pct = 100 * total_memory_gb / max_memory_gb
-        text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
-        self.total_memory_textbox.textbox.delete('1.0', '10.0')
-        self.total_memory_textbox.textbox.insert('1.0', text)
-        # get position count:
-        positions = 1
-        if self.loop_over_position_list.get():
-            positions = max(len(self.XY_stage_position_list), 1)
-        # calculate storage:
-        acquires = self.acquire_number_spinbox.value
-        data_gb = 1e-9 * self.scope.bytes_per_data_buffer
-        preview_gb = 1e-9 * self.scope.bytes_per_preview_buffer
-        total_storage_gb = (data_gb + preview_gb) * positions * acquires
-        text = '%0.3f'%total_storage_gb
-        self.total_storage_textbox.textbox.delete('1.0', '10.0')
-        self.total_storage_textbox.textbox.insert('1.0', text)        
-        # calculate time:
-        min_acquire_time_s = self.scope.buffer_time_s * positions
-        min_total_time_s = min_acquire_time_s * acquires
-        if self.delay_spinbox.value > min_acquire_time_s:
-            min_total_time_s = (
-                self.delay_spinbox.value * (acquires - 1) + min_acquire_time_s)
-        text = '%0.6f (%0.0f min)'%(min_total_time_s, (min_total_time_s / 60))
-        self.min_time_textbox.textbox.delete('1.0', '10.0')
-        self.min_time_textbox.textbox.insert('1.0', text)
-        return None
-
-    def _init_position_list(self):
-        self.positions_frame = tk.LabelFrame(
+    def init_position_list(self):
+        positions_frame = tk.LabelFrame(
             self.root, text='POSITION LIST (Scout mode)', bd=6)
-        self.positions_frame.grid(
+        positions_frame.grid(
             row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
-        self.positions_frame.bind( # force update
-            '<Enter>', lambda event: self.positions_frame.focus_set())
         button_width, button_height = 25, 2
         spinbox_width = 20
         # set list defaults:
@@ -1691,11 +1862,9 @@ class GuiMicroscope:
             XY_stage_file_path = (
                 folder_path + '\\XY_stage_position_list.txt')
             with open(focus_piezo_file_path, 'r') as file:
-                focus_piezo_position_list = (
-                    file.read().splitlines()[1:]) # skip 1st
+                focus_piezo_position_list = file.read().splitlines()
             with open(XY_stage_file_path, 'r') as file:
-                XY_stage_position_list = (
-                    file.read().splitlines()[1:]) # skip 1st
+                XY_stage_position_list = file.read().splitlines()
             for i, element in enumerate(focus_piezo_position_list):
                 focus_piezo_z_um = int(element.strip(','))
                 focus_piezo_position_list[i] = focus_piezo_z_um
@@ -1720,7 +1889,7 @@ class GuiMicroscope:
             self.total_positions_spinbox.update_and_validate(total_positions)
             return None
         load_from_folder_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Load from folder",
             command=load_positions_from_folder,
             font=('Segoe UI', '10', 'underline'),
@@ -1742,7 +1911,7 @@ class GuiMicroscope:
             self.current_position_spinbox.update_and_validate(0)
             return None        
         delete_all_positions_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Delete all positions",
             command=delete_all_positions,
             width=button_width,
@@ -1758,9 +1927,9 @@ class GuiMicroscope:
                 "NOTE: this operation cannot be reversed."))
         # delete current:
         def delete_current_position():
-            if self.total_positions_spinbox.value == 0:
+            if self.total_positions_spinbox.value.get() == 0:
                 return
-            i = self.current_position_spinbox.value - 1
+            i = self.current_position_spinbox.value.get() - 1
             self.focus_piezo_position_list.pop(i)
             self.XY_stage_position_list.pop(i)
             # overwrite files:
@@ -1785,7 +1954,7 @@ class GuiMicroscope:
             self.current_position_spinbox.update_and_validate(i)
             return None
         delete_current_position_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Delete current position",
             command=delete_current_position,
             width=button_width,
@@ -1803,7 +1972,7 @@ class GuiMicroscope:
                 "NOTE: this operation cannot be reversed."))
         # total positions:
         self.total_positions_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.positions_frame,
+            positions_frame,
             label='Total positions',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -1823,23 +1992,22 @@ class GuiMicroscope:
                 "the GUI and the associated .txt files in the\n" +
                 "'sols_gui_session' folder."))
         # utility function:
-        def update_position_and_snap(position):
-            if self.total_positions_spinbox.value != 0:
+        def update_position(position):
+            if self.total_positions_spinbox.value.get() != 0:
                 self.focus_piezo_z_um.update_and_validate(
                     self.focus_piezo_position_list[position - 1])
-                self.update_XY_stage_position(
+                self._update_XY_stage_position(
                     self.XY_stage_position_list[position - 1])
                 self.current_position_spinbox.update_and_validate(position)
-                self.apply_settings(single_volume=True, check_XY_stage=False)
-                self.last_acquire_task.join() # don't accumulate
-                self.last_acquire_task = self.scope.acquire()
+                if not self.running_scout_mode.get():
+                    self._snap_and_display()
             return None
         # move to start:
         def move_to_start():
-            update_position_and_snap(1)
+            update_position(1)
             return None
         move_to_start_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Move to start",
             command=move_to_start,
             width=button_width,
@@ -1855,13 +2023,13 @@ class GuiMicroscope:
                 "position is not already at the start of the position list."))
         # move back:
         def move_back():
-            new_position = self.current_position_spinbox.value - 1
+            new_position = self.current_position_spinbox.value.get() - 1
             if new_position < 1:
                 new_position = 1
-            update_position_and_snap(new_position)
+            update_position(new_position)
             return None
         move_back_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Move back (-1)",
             command=move_back,
             width=button_width,
@@ -1878,7 +2046,7 @@ class GuiMicroscope:
                 "position is not already at the start of the position list."))
         # current position:
         self.current_position_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.positions_frame,
+            positions_frame,
             label='Current position',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -1902,13 +2070,13 @@ class GuiMicroscope:
                 "buttons to update if needed."))
         # go forwards:
         def move_forward():
-            new_position = self.current_position_spinbox.value + 1
-            if new_position > self.total_positions_spinbox.value:
-                new_position = self.total_positions_spinbox.value
-            update_position_and_snap(new_position)
+            new_position = self.current_position_spinbox.value.get() + 1
+            if new_position > self.total_positions_spinbox.value.get():
+                new_position = self.total_positions_spinbox.value.get()
+            update_position(new_position)
             return None
         move_forward_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Move forward (+1)",
             command=move_forward,
             width=button_width,
@@ -1925,10 +2093,10 @@ class GuiMicroscope:
                 "position is not already at the end of the position list."))
         # move to end:
         def move_to_end():
-            update_position_and_snap(self.total_positions_spinbox.value)
+            update_position(self.total_positions_spinbox.value.get())
             return None
         move_to_end_button = tk.Button(
-            self.positions_frame,
+            positions_frame,
             text="Move to end",
             command=move_to_end,
             width=button_width,
@@ -1944,12 +2112,11 @@ class GuiMicroscope:
                 "position is not already at the end of the position list."))        
         return None
 
-    def update_position_list(self):
+    def _update_position_list(self):
         # update list:
-        self.focus_piezo_position_list.append(
-            self.applied_settings['focus_piezo_z_um'])
-        self.XY_stage_position_list.append(
-            self.applied_settings['XY_stage_position_mm'])
+        self.focus_piezo_position_list.append(self.focus_piezo_z_um.value.get())
+        self.XY_stage_position_list.append([self.X_stage_position_mm,
+                                            self.Y_stage_position_mm])
         # update gui:
         positions = len(self.focus_piezo_position_list)
         self.total_positions_spinbox.update_and_validate(positions)
@@ -1963,27 +2130,19 @@ class GuiMicroscope:
             file.write(str(self.XY_stage_position_list[-1]) + ',\n')
         return None
 
-    def _init_acquire(self):
+    def init_acquire(self):
         self.acquire_frame = tk.LabelFrame(
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
         self.acquire_frame.grid(
             row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
-        self.acquire_frame.bind( # force update
-            '<Enter>', lambda event: self.acquire_frame.focus_set())
         button_width, button_height = 25, 2
         bold_width_adjust = -3
         spinbox_width = 20
         # snap volume:
-        def snap_volume():
-            self.apply_settings(single_volume=True)
-            self.update_settings_output()
-            self.last_acquire_task.join() # don't accumulate acquires
-            self.scope.acquire()
-            return None
         snap_volume_button = tk.Button(
             self.acquire_frame,
             text="Snap volume",
-            command=snap_volume,
+            command=self._snap_and_display,
             font=('Segoe UI', '10', 'bold'),
             width=button_width + bold_width_adjust,
             height=button_height)
@@ -1998,24 +2157,19 @@ class GuiMicroscope:
                 "NOTE: this does not save any data or position information."))
         # live mode:
         def live_mode():
+            self._set_running_mode('live')
             def run_live_mode():
-                if self.running_live.get():
-                    self.apply_settings(
-                        single_volume=True, check_XY_stage=False)
-                    self.last_acquire_task.join() # don't accumulate acquires
-                    self.last_acquire_task = self.scope.acquire()
+                if self.running_live_mode.get():
+                    self._snap_and_display()
                     self.root.after(self.gui_delay_ms, run_live_mode)
                 return None
-            self.set_running_mode('live')
-            self.apply_settings(single_volume=True)
-            self.update_settings_output()
             run_live_mode()
             return None
-        self.running_live = tk.BooleanVar()
+        self.running_live_mode = tk.BooleanVar()
         live_mode_button = tk.Checkbutton(
             self.acquire_frame,
             text='Live mode (On/Off)',
-            variable=self.running_live,
+            variable=self.running_live_mode,
             command=live_mode,
             indicatoron=0,
             font=('Segoe UI', '10', 'italic'),
@@ -2034,91 +2188,15 @@ class GuiMicroscope:
                 "effect use 'Scout mode'.")) 
         # scout mode:
         def scout_mode():
-            self.set_running_mode('scout')
-            self.enable_XYZ_navigation_buttons(True)
-            self.apply_settings(single_volume=True)
-            self.update_settings_output()        
-            if self.running_scout.get():
-                self.last_acquire_task.join() # don't accumulate acquires
-                self.last_acquire_task = self.scope.acquire()
-            def run_scout_mode():
-                if self.running_scout.get():
-                    def snap():
-                        self.apply_settings(
-                            single_volume=True, check_XY_stage=False)
-                        self.last_acquire_task.join() # don't accumulate
-                        self.last_acquire_task = self.scope.acquire()
-                    # Check Z:
-                    focus_piezo_z_um = self.focus_piezo_z_um.value
-                    if self.applied_settings[
-                        'focus_piezo_z_um'] != focus_piezo_z_um:
-                        snap()
-                    # Check XY buttons:
-                    def update_XY_position(): # only called if button pressed
-                        self.XY_button_pressed = True
-                        # current position:
-                        XY_stage_position_mm = self.XY_stage_position_mm
-                        # calculate move size:
-                        move_pct = self.move_pct.value / 100
-                        scan_width_um = (
-                        self.applied_settings['width_px'] * sols.sample_px_um)
-                        ud_move_mm = (
-                            1e-3 * self.applied_settings[
-                                'scan_range_um'] * move_pct)
-                        lr_move_mm = 1e-3 * scan_width_um * move_pct
-                        # check which direction:
-                        if self.XY_stage_last_move == 'up (+Y)':
-                            move_mm = (0, ud_move_mm)
-                        if self.XY_stage_last_move == 'down (-Y)':
-                            move_mm = (0, -ud_move_mm)
-                        if self.XY_stage_last_move == 'left (-X)':
-                            move_mm = (-lr_move_mm, 0)
-                        if self.XY_stage_last_move == 'right (+X)':
-                            move_mm = (lr_move_mm, 0)
-                        # update position and gui:
-                        XY_stage_position_mm = tuple(map(sum, zip(
-                            XY_stage_position_mm, move_mm)))
-                        self.update_XY_stage_position(XY_stage_position_mm)
-                        # toggle buttons back:
-                        self.move_up.set(0)
-                        self.move_down.set(0)
-                        self.move_left.set(0)
-                        self.move_right.set(0)
-                    # run minimal code for speed:
-                    self.XY_button_pressed = False
-                    if self.move_up.get():
-                        self.XY_stage_last_move = 'up (+Y)'
-                        update_XY_position()
-                    elif self.move_down.get():
-                        self.XY_stage_last_move = 'down (-Y)'
-                        update_XY_position()
-                    elif self.move_left.get():
-                        self.XY_stage_last_move = 'left (-X)'
-                        update_XY_position()
-                    elif self.move_right.get():
-                        self.XY_stage_last_move = 'right (+X)'
-                        update_XY_position()
-                    if self.XY_button_pressed:
-                        snap() # before gui update
-                        self.update_XY_stage_last_move(self.XY_stage_last_move)
-                    # Check XY joystick:
-                    XY_stage_position_mm = self.check_XY_stage()
-                    if self.XY_joystick_active:
-                        snap() # before gui update
-                        self.update_XY_stage_last_move(self.XY_stage_last_move)
-                    else: # (avoids erroneous XY updates)
-                        self.update_XY_stage_position(XY_stage_position_mm)
-                    self.root.after(self.gui_delay_ms, run_scout_mode)
-                else:
-                    self.enable_XYZ_navigation_buttons(False)
-                return None
-            run_scout_mode()
+            self._set_running_mode('scout')
+            if self.running_scout_mode.get():
+                self._snap_and_display()
             return None
-        self.running_scout = tk.BooleanVar()
+        self.running_scout_mode = tk.BooleanVar()
         scout_mode_button = tk.Checkbutton(
             self.acquire_frame,
             text='Scout mode (On/Off)',
-            variable=self.running_scout,
+            variable=self.running_scout_mode,
             command=scout_mode,
             indicatoron=0,
             font=('Segoe UI', '10', 'bold', 'italic'),
@@ -2141,10 +2219,10 @@ class GuiMicroscope:
                 "settings."))
         # save volume and position:
         def save_volume_and_position():
-            self.apply_settings(single_volume=True)
-            self.update_position_list()
-            self.update_settings_output()
-            folder_name = self.get_folder_name() + '_snap'
+            if self.volumes_per_buffer.value.get() != 1:
+                self.volumes_per_buffer.update_and_validate(1)
+            self._update_position_list()
+            folder_name = self._get_folder_name() + '_snap'
             self.last_acquire_task.join() # don't accumulate acquires
             self.scope.acquire(filename='snap.tif',
                                folder_name=folder_name,
@@ -2170,10 +2248,8 @@ class GuiMicroscope:
         # run acquire:
         def acquire():
             print('\nAcquire -> started')
-            self.set_running_mode('acquire', enable=True)
-            self.apply_settings()
-            self.update_settings_output()
-            self.folder_name = self.get_folder_name() + '_acquire'
+            self._set_running_mode('acquire', enable=True)
+            self.folder_name = self._get_folder_name() + '_acquire'
             self.description = self.description_textbox.text
             self.acquire_count = 0
             self.saved_delay_s = False
@@ -2192,11 +2268,10 @@ class GuiMicroscope:
                         self.loop_t0_s = time.perf_counter()
                     self.focus_piezo_z_um.update_and_validate(
                         self.focus_piezo_position_list[self.current_position])
-                    self.update_XY_stage_position(
+                    self._update_XY_stage_position(
                         self.XY_stage_position_list[self.current_position])
                     self.current_position_spinbox.update_and_validate(
                         self.current_position + 1)
-                    self.apply_settings(check_XY_stage=False)
                     self.scope.acquire(filename='%06i_p%06i.tif'%(
                         self.acquire_count, self.current_position),
                                        folder_name=self.folder_name,
@@ -2207,16 +2282,16 @@ class GuiMicroscope:
                         self.current_position = 0
                         self.acquire_count += 1
                         loop_time_s = time.perf_counter() - self.loop_t0_s
-                        if self.delay_spinbox.value > loop_time_s:
+                        if self.delay_spinbox.value.get() > loop_time_s:
                             wait_ms = int(round(1e3 * (
-                                self.delay_spinbox.value - loop_time_s)))                   
+                                self.delay_spinbox.value.get() - loop_time_s)))                   
                 else:
                     self.scope.acquire(filename='%06i.tif'%self.acquire_count,
                                        folder_name=self.folder_name,
                                        description=self.description)
                     self.acquire_count += 1
-                    if self.delay_spinbox.value > self.scope.buffer_time_s:
-                        wait_ms = int(round(1e3 * self.delay_spinbox.value))
+                    if self.delay_spinbox.value.get() > self.scope.buffer_time_s:
+                        wait_ms = int(round(1e3 * self.delay_spinbox.value.get()))
                 # record gui delay:
                 if (not self.saved_delay_s and os.path.exists(
                     self.folder_name)):
@@ -2224,10 +2299,10 @@ class GuiMicroscope:
                               "w") as file:
                         file.write(self.folder_name + '\n')
                         file.write(
-                            'gui_delay_s: %i'%self.delay_spinbox.value + '\n')
+                            'gui_delay_s: %i'%self.delay_spinbox.value.get() + '\n')
                         self.saved_delay_s = True
                 # check acquire count before re-run:
-                if self.acquire_count < self.acquire_number_spinbox.value:
+                if self.acquire_count < self.acquire_number_spinbox.value.get():
                     self.root.after(wait_ms, run_acquire)
                 else:
                     self.scope.finish_all_tasks()
@@ -2284,14 +2359,14 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def _init_quit(self):
+    def init_quit(self):
         quit_frame = tk.LabelFrame(
             self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
         quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
         def close():
             if self.init_microscope: self.scope.close()
             self.root.quit()
-            return None        
+            return None
         quit_gui_button = tk.Button(
             quit_frame,
             text="EXIT GUI",
@@ -2305,159 +2380,6 @@ class GuiMicroscope:
             balloonmsg=(
                 "The 'EXIT GUI' button will close down the microscope \n" +
                 "without errors. It's the right way the end the GUI session."))
-        return None
-
-    def enable_XYZ_navigation_buttons(self, enable): # pass True or False
-        state = 'normal'
-        if not enable: state = 'disabled'
-        # focus:
-        for child in self.focus_piezo_z_um.winfo_children():
-            child.configure(state=state)
-        self.button_large_move_up.config(state=state)
-        self.button_small_move_up.config(state=state)
-        self.button_center_move.config(state=state)
-        self.button_small_move_down.config(state=state)
-        self.button_large_move_down.config(state=state)
-        # XY stage:
-        self.button_up.config(state=state)
-        self.button_down.config(state=state)
-        self.button_left.config(state=state)
-        self.button_right.config(state=state)
-        return None
-
-    def get_folder_name(self):
-        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
-        folder_index = 0
-        folder_name = (
-            self.session_folder + dt +
-            '%03i_'%folder_index + self.label_textbox.text)
-        while os.path.exists(folder_name): # check before overwriting
-            folder_index +=1
-            folder_name = (
-                self.session_folder + dt +
-                '%03i_'%folder_index + self.label_textbox.text)
-        return folder_name
-
-    def set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
-        # define mode dictionary:
-        mode_to_variable = {
-            'grid_preview':self.running_grid_preview,
-            'tile_preview':self.running_tile_preview,
-            'update_settings':self.running_update_settings,
-            'live':self.running_live,
-            'scout':self.running_scout,
-            'acquire':self.running_acquire
-            }
-        variable = mode_to_variable[mode]
-        # turn everything off except current mode:
-        for v in mode_to_variable.values():
-            if v != variable:
-                v.set(0)
-        # optionally enable the mode if not done by 'CheckButton':
-        if enable:
-            variable.set(1)
-        return None
-
-    def get_gui_settings(self):
-        # collect settings from gui and re-format for '.scope.apply_settings'
-        channels_per_slice, power_per_channel = [], []
-        if self.power_tl.checkbox_value.get():
-            channels_per_slice.append('LED')
-            power_per_channel.append(self.power_tl.value)
-        if self.power_405.checkbox_value.get():
-            channels_per_slice.append('405')
-            power_per_channel.append(self.power_405.value)
-        if self.power_488.checkbox_value.get():
-            channels_per_slice.append('488')
-            power_per_channel.append(self.power_488.value)
-        if self.power_561.checkbox_value.get():
-            channels_per_slice.append('561')
-            power_per_channel.append(self.power_561.value)
-        if self.power_640.checkbox_value.get():
-            channels_per_slice.append('640')
-            power_per_channel.append(self.power_640.value)
-        if len(channels_per_slice) == 0: # default TL if nothing selected
-            self.power_tl.checkbox_value.set(1)
-            channels_per_slice = ('LED',)
-            power_per_channel = (self.power_tl.value,)
-        # settings:
-        gui_settings = {
-            'channels_per_slice'  :channels_per_slice,
-            'power_per_channel'   :power_per_channel,
-            'emission_filter'     :self.emission_filter.get(),
-            'illumination_time_us':self.illumination_time_us.value,
-            'height_px'           :self.height_px.value,
-            'width_px'            :self.width_px.value,
-            'voxel_aspect_ratio'  :self.voxel_aspect_ratio.value,
-            'scan_range_um'       :self.scan_range_um.value,
-            'volumes_per_buffer'  :self.volumes_spinbox.value,
-            'focus_piezo_z_um'    :self.focus_piezo_z_um.value,
-            'XY_stage_position_mm':self.XY_stage_position_mm}
-        return gui_settings
-
-    def check_XY_stage(self):
-        # has the position changed? is the joystick being used? 
-        self.scope.apply_settings().join() # update attributes
-        XY_stage_position_mm = list(self.scope.XY_stage_position_mm)
-        self.XY_joystick_active = False
-        if   XY_stage_position_mm[0] == self.scope.XY_stage.x_min: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'left (-X)'
-        elif XY_stage_position_mm[0] == self.scope.XY_stage.x_max: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'right (+X)'
-        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_min: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'down (-Y)'
-        elif XY_stage_position_mm[1] == self.scope.XY_stage.y_max: # moving
-            self.XY_joystick_active = True
-            self.XY_stage_last_move = 'up (+Y)'
-        return XY_stage_position_mm
-
-    def apply_settings(self, single_volume=False, check_XY_stage=True):
-        if check_XY_stage: # joystick used? If so update the gui:
-            XY_stage_position_mm = self.check_XY_stage()
-            if XY_stage_position_mm != self.XY_stage_position_mm:
-                self.update_XY_stage_position(XY_stage_position_mm)
-        gui_settings = self.get_gui_settings()
-        new_settings = len(gui_settings)*[None] # pass 'None' if no change
-        # check gui settings against applied settings:
-        if (self.applied_settings[
-            'channels_per_slice'] != gui_settings['channels_per_slice'] or
-            self.applied_settings[
-                'power_per_channel']  != gui_settings['power_per_channel']):
-            new_settings[0] = gui_settings['channels_per_slice']
-            new_settings[1] = gui_settings['power_per_channel']
-        for i, k in enumerate(list(self.applied_settings.keys())[2:-2]): #-2 XYZ
-            if self.applied_settings[k] != gui_settings[k]:
-                new_settings[i + 2] = gui_settings[k] # + 2 started at setting 2
-        if self.applied_settings[
-            'focus_piezo_z_um'] != gui_settings['focus_piezo_z_um']:
-            new_settings[9] = (gui_settings['focus_piezo_z_um'], 'absolute')
-        if not self.XY_joystick_active:
-            if self.applied_settings[
-                'XY_stage_position_mm'] != gui_settings['XY_stage_position_mm']:
-                new_settings[10] = (gui_settings['XY_stage_position_mm'][0],
-                                    gui_settings['XY_stage_position_mm'][1],
-                                    'absolute')
-        # apply settings:
-        if single_volume: new_settings[8] = 1
-        self.scope.apply_settings(
-            channels_per_slice      = new_settings[0],
-            power_per_channel       = new_settings[1],
-            emission_filter         = new_settings[2],
-            illumination_time_us    = new_settings[3],
-            height_px               = new_settings[4],
-            width_px                = new_settings[5],
-            voxel_aspect_ratio      = new_settings[6],
-            scan_range_um           = new_settings[7],
-            volumes_per_buffer      = new_settings[8],
-            focus_piezo_z_um        = new_settings[9],
-            XY_stage_position_mm    = new_settings[10])
-        # update settings attributes:
-        for k in self.applied_settings.keys(): # deepcopy to aviod circular ref
-            self.applied_settings[k] = copy.deepcopy(gui_settings[k])
-        if single_volume: self.applied_settings['volumes_per_buffer'] = 1
         return None
 
 if __name__ == '__main__':
