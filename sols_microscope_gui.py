@@ -533,8 +533,7 @@ class GuiMicroscope:
             balloonmsg=(
                 "The 'FOCUS PIEZO' is a (fast) fine focus device for \n" +
                 "precisley adjusting the focus of the primary objective \n" +
-                "over a short range.\n" +
-                "NOTE: this is only active in 'Scout mode'"))
+                "over a short range."))
         min_um, max_um = 0, 100
         small_move_um, large_move_um = 1, 5
         center_um = int(round((max_um - min_um) / 2))
@@ -617,7 +616,7 @@ class GuiMicroscope:
         return None
 
     def init_XY_stage(self):
-        frame = tk.LabelFrame(self.root, text='XY STAGE (Scout mode)', bd=6)
+        frame = tk.LabelFrame(self.root, text='XY STAGE', bd=6)
         frame.grid(row=3, column=2, rowspan=2, columnspan=2,
                    padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
@@ -632,8 +631,7 @@ class GuiMicroscope:
                 "- Move buttons for 'left', 'right', 'up' and 'down'.\n" +
                 "- A slider bar for the 'step size (% of FOV)', which \n" +
                 "determines how much the move buttons will move as a % \n" +
-                "of the current field of view (FOV).\n"
-                "NOTE: this is only active in 'Scout mode'"))
+                "of the current field of view (FOV)."))
         # position:
         self.XY_stage_position_mm = tk.StringVar()
         self.XY_stage_position_mm.trace_add(
@@ -771,10 +769,6 @@ class GuiMicroscope:
         frame.grid(row=1, column=4, rowspan=2, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
-        # set grid defaults:
-        self.grid_rows = 2
-        self.grid_cols = 4
-        self.grid_spacing_um = 1000
         # load from file:
         def _load_grid_from_file():
             # get file from user:
@@ -785,9 +779,9 @@ class GuiMicroscope:
             with open(file_path, 'r') as file:
                 grid_data = file.read().splitlines()
             # parse and update attributes:
-            self.grid_rows = int(grid_data[0].split(':')[1])
-            self.grid_cols = int(grid_data[1].split(':')[1])
-            self.grid_spacing_um = int(grid_data[2].split(':')[1])
+            self.grid_rows.update_and_validate(int(grid_data[0].split(':')[1]))
+            self.grid_cols.update_and_validate(int(grid_data[1].split(':')[1]))
+            self.grid_um.update_and_validate(int(grid_data[2].split(':')[1]))
             # show user:
             _create_grid()
             # reset state of grid buttons:
@@ -820,36 +814,36 @@ class GuiMicroscope:
         create_grid_popup.withdraw()
         # user input:
         spinbox_width = 20
-        self.grid_rows_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.grid_rows = tkcw.CheckboxSliderSpinbox(
             create_grid_popup,
             label='How many rows? (1-16)',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=1,
             max_value=16,
-            default_value=self.grid_rows,
+            default_value=2,
             row=0,
             width=spinbox_width,
             sticky='n')
-        self.grid_cols_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.grid_cols = tkcw.CheckboxSliderSpinbox(
             create_grid_popup,
             label='How many columns? (1-24)',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=1,
             max_value=24,
-            default_value=self.grid_cols,
+            default_value=4,
             row=1,
             width=spinbox_width,
             sticky='n')
-        self.grid_spacing_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.grid_um = tkcw.CheckboxSliderSpinbox(
             create_grid_popup,
             label='What is the spacing (um)?',
             checkbox_enabled=False,
             slider_enabled=False,
             min_value=1,
             max_value=20000,
-            default_value=self.grid_spacing_um,
+            default_value=100,
             row=2,
             width=spinbox_width,
             sticky='n')
@@ -861,18 +855,14 @@ class GuiMicroscope:
                 # tidy up any previous display:
                 if hasattr(self, 'create_grid_buttons_frame'):
                     self.create_grid_buttons_frame.destroy()
-                # update attributes:
-                self.grid_rows = self.grid_rows_spinbox.value.get()
-                self.grid_cols = self.grid_cols_spinbox.value.get()
-                self.grid_spacing_um = self.grid_spacing_spinbox.value.get()
                 # generate grid list and show buttons:
                 self.create_grid_buttons_frame = tk.LabelFrame(
                     create_grid_popup, text='XY GRID', bd=6)
                 self.create_grid_buttons_frame.grid(
                     row=0, column=1, rowspan=5, padx=10, pady=10)
                 self.grid_list = []
-                for r in range(self.grid_rows):
-                    for c in range(self.grid_cols):
+                for r in range(self.grid_rows.value.get()):
+                    for c in range(self.grid_cols.value.get()):
                         name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
                         grid_button = tk.Button(
                             self.create_grid_buttons_frame,
@@ -889,9 +879,9 @@ class GuiMicroscope:
                 # overwrite grid file:
                 with open(self.session_folder +
                           "grid_navigator_parameters.txt", "w") as file:
-                    file.write('rows:%i'%self.grid_rows + '\n')
-                    file.write('columns:%i'%self.grid_cols + '\n')
-                    file.write('spacing_um:%i'%self.grid_spacing_um + '\n')
+                    file.write('rows:%i'%self.grid_rows.value.get() + '\n')
+                    file.write('columns:%i'%self.grid_cols.value.get() + '\n')
+                    file.write('spacing_um:%i'%self.grid_um.value.get() + '\n')
                 return None
             create_button = tk.Button(
                 create_grid_popup, text="Create",
@@ -946,15 +936,15 @@ class GuiMicroscope:
                 self.grid_location.set(grid)
                 row, col, p_mm = self.grid_list[grid]
                 # find home position:
-                spacing_mm = self.grid_spacing_um / 1000
-                r0c0_mm = [self.X_stage_position_mm + col * spacing_mm,
-                           self.Y_stage_position_mm - row * spacing_mm]
+                grid_mm = self.grid_um.value.get() / 1000
+                r0c0_mm = [self.X_stage_position_mm + col * grid_mm,
+                           self.Y_stage_position_mm - row * grid_mm]
                 # generate positions:
                 positions_mm = []
-                for r in range(self.grid_rows):
-                    for c in range(self.grid_cols):
-                        positions_mm.append([r0c0_mm[0] - (c * spacing_mm),
-                                             r0c0_mm[1] + (r * spacing_mm)])
+                for r in range(self.grid_rows.value.get()):
+                    for c in range(self.grid_cols.value.get()):
+                        positions_mm.append([r0c0_mm[0] - (c * grid_mm),
+                                             r0c0_mm[1] + (r * grid_mm)])
                 # update grid list:
                 for g in range(len(self.grid_list)):
                     self.grid_list[g][2] = positions_mm[g]                
@@ -1194,8 +1184,8 @@ class GuiMicroscope:
                 if not self.tile_the_grid.get():
                     if self.current_grid_preview == 0:
                         self.grid_preview = np.zeros(
-                            (self.grid_rows * shape[0],
-                             self.grid_cols * shape[1]), 'uint16')
+                            (self.grid_rows.value.get() * shape[0],
+                             self.grid_cols.value.get() * shape[1]), 'uint16')
                     self.grid_preview[
                         gr * shape[0]:(gr + 1) * shape[0],
                         gc * shape[1]:(gc + 1) * shape[1]
@@ -1203,8 +1193,10 @@ class GuiMicroscope:
                 else:
                     if self.current_grid_preview == 0:
                         self.grid_preview = np.zeros(
-                            (self.grid_rows * shape[0] * self.tile_rows,
-                             self.grid_cols * shape[1] * self.tile_cols),
+                            (self.grid_rows.value.get() *
+                             shape[0] * self.tile_rows,
+                             self.grid_cols.value.get() *
+                             shape[1] * self.tile_cols),
                             'uint16')
                     self.grid_preview[
                         (gr * self.tile_rows + tr) * shape[0]:
@@ -2030,9 +2022,7 @@ class GuiMicroscope:
             balloonmsg=(
                 "The 'Move back (-1)' button will move the 'FOCUS PIEZO' \n" + 
                 "and 'XY STAGE' to the previous (n - 1) position in the \n" +
-                "position list.\n" +
-                "NOTE: this is only active in 'Scout mode' and if the \n" +
-                "position is not already at the start of the position list."))
+                "position list."))
         # current position:
         self.current_position_spinbox = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -2077,9 +2067,7 @@ class GuiMicroscope:
             balloonmsg=(
                 "The 'Move forward (+1)' button will move the 'FOCUS \n" + 
                 "PIEZO' and 'XY STAGE' to the next (n + 1) position in \n" +
-                "the position list.\n" +
-                "NOTE: this is only active in 'Scout mode' and if the \n" +
-                "position is not already at the end of the position list."))
+                "the position list."))
         # move to end:
         def _move_to_end():
             _update_position(self.total_positions_spinbox.value.get())
@@ -2096,9 +2084,7 @@ class GuiMicroscope:
             move_to_end_button,
             balloonmsg=(
                 "The 'Move to end' button will move the 'FOCUS PIEZO' \n" + 
-                "and 'XY STAGE' to the last position in the position list.\n" +
-                "NOTE: this is only active in 'Scout mode' and if the \n" +
-                "position is not already at the end of the position list."))        
+                "and 'XY STAGE' to the last position in the position list."))        
         return None
 
     def _update_position_list(self):
@@ -2199,12 +2185,7 @@ class GuiMicroscope:
                 "The 'Scout mode (On/Off)' button will enable/disable \n" + 
                 "'Scout mode'. 'Scout mode' will only acquire a volume\n" +
                 "if XYZ motion is detected. This helps to reduce \n" +
-                "photobleaching/phototoxicity.\n" +
-                "NOTE: to reduce latency the microscope settings are only \n" +
-                "updated when a button from the 'ACQUIRE' panel is pressed \n" +
-                "(excluding 'Cancel acquire'). For example, you can use \n" +
-                "'Snap volume' to refresh the display with the latest \n" +
-                "settings."))
+                "photobleaching/phototoxicity."))
         # save volume and position:
         def _save_volume_and_position():
             if self.volumes_per_buffer.value.get() != 1:
