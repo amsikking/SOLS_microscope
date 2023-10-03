@@ -1124,9 +1124,6 @@ class GuiMicroscope:
                 self.grid_preview_list = self.grid_list
             else:
                 folder_name = self._get_folder_name() + '_grid_tile'
-                # get tile parameters:
-                self.tile_rows = self.tile_array_width.value.get()
-                self.tile_cols = self.tile_rows
                 # calculate move size:
                 tile_X_mm = 1e-3 * self.width_px.value.get() * sols.sample_px_um
                 tile_Y_mm = 1e-3 * self.scan_range_um.value.get()
@@ -1134,8 +1131,8 @@ class GuiMicroscope:
                 self.grid_preview_list = []
                 for g in range(len(self.grid_list)):
                     gr, gc, g_mm = self.grid_list[g]
-                    for tr in range(self.tile_rows):
-                        for tc in range(self.tile_cols):
+                    for tr in range(self.tile_rc.value.get()):
+                        for tc in range(self.tile_rc.value.get()):
                             p_mm = [g_mm[0] - tc * tile_X_mm,
                                     g_mm[1] + tr * tile_Y_mm]
                             self.grid_preview_list.append(
@@ -1194,15 +1191,15 @@ class GuiMicroscope:
                     if self.current_grid_preview == 0:
                         self.grid_preview = np.zeros(
                             (self.grid_rows.value.get() *
-                             shape[0] * self.tile_rows,
+                             shape[0] * self.tile_rc.value.get(),
                              self.grid_cols.value.get() *
-                             shape[1] * self.tile_cols),
+                             shape[1] * self.tile_rc.value.get()),
                             'uint16')
                     self.grid_preview[
-                        (gr * self.tile_rows + tr) * shape[0]:
-                        (gr * self.tile_rows + tr + 1) * shape[0],
-                        (gc * self.tile_cols + tc) * shape[1]:
-                        (gc * self.tile_cols + tc + 1) * shape[1]
+                        (gr * self.tile_rc.value.get() + tr) * shape[0]:
+                        (gr * self.tile_rc.value.get() + tr + 1) * shape[0],
+                        (gc * self.tile_rc.value.get() + tc) * shape[1]:
+                        (gc * self.tile_rc.value.get() + tc + 1) * shape[1]
                         ] = image
                 # display:
                 self.scope.display.show_grid_preview(self.grid_preview)
@@ -1264,7 +1261,7 @@ class GuiMicroscope:
         button_width, button_height = 25, 2
         spinbox_width = 20
         # tile array width:
-        self.tile_array_width = tkcw.CheckboxSliderSpinbox(
+        self.tile_rc = tkcw.CheckboxSliderSpinbox(
             frame,
             label='Array height and width (tiles)',
             checkbox_enabled=False,
@@ -1274,9 +1271,9 @@ class GuiMicroscope:
             default_value=2,
             row=0,
             width=spinbox_width)
-        tile_array_width_tip = tix.Balloon(self.tile_array_width)
+        tile_array_width_tip = tix.Balloon(self.tile_rc)
         tile_array_width_tip.bind_widget(
-            self.tile_array_width,
+            self.tile_rc,
             balloonmsg=(
                 "The 'Array height and width (tiles)' determines how many \n" +
                 "tiles the 'Start tile' button will generate. For example, \n" +
@@ -1305,16 +1302,13 @@ class GuiMicroscope:
             if self.volumes_per_buffer.value.get() != 1:
                 self.volumes_per_buffer.update_and_validate(1)
             folder_name = self._get_folder_name() + '_tile'
-            # get tile parameters:
-            self.tile_rows = self.tile_array_width.value.get()
-            self.tile_cols = self.tile_rows
             # calculate move size:
             X_move_mm = 1e-3 * self.width_px.value.get() * sols.sample_px_um
             Y_move_mm = 1e-3 * self.scan_range_um.value.get()
             # generate tile list:
             self.tile_list = []
-            for r in range(self.tile_rows):
-                for c in range(self.tile_cols):
+            for r in range(self.tile_rc.value.get()):
+                for c in range(self.tile_rc.value.get()):
                     p_mm = (self.X_stage_position_mm - c * X_move_mm,
                             self.Y_stage_position_mm + r * Y_move_mm)
                     self.tile_list.append((r, c, p_mm))
@@ -1349,8 +1343,8 @@ class GuiMicroscope:
                 # make base image:
                 if self.current_tile == 0:
                     self.tile_preview = np.zeros(
-                        (self.tile_rows * shape[0],
-                         self.tile_cols * shape[1]), 'uint16')
+                        (self.tile_rc.value.get() * shape[0],
+                         self.tile_rc.value.get() * shape[1]), 'uint16')
                 # add current tile:
                 self.tile_preview[r * shape[0]:(r + 1) * shape[0],
                                   c * shape[1]:(c + 1) * shape[1]] = tile
