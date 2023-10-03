@@ -525,7 +525,7 @@ class GuiMicroscope:
         return None
 
     def init_focus_piezo(self):
-        frame = tk.LabelFrame(self.root, text='FOCUS PIEZO (Scout mode)', bd=6)
+        frame = tk.LabelFrame(self.root, text='FOCUS PIEZO', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
         frame_tip = tix.Balloon(frame)
         frame_tip.bind_widget(
@@ -1472,10 +1472,8 @@ class GuiMicroscope:
         return None
 
     def init_settings(self):
-        self.settings_frame = tk.LabelFrame(
-            self.root, text='SETTINGS (misc)', bd=6)
-        self.settings_frame.grid(
-            row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        frame = tk.LabelFrame(self.root, text='SETTINGS (misc)', bd=6)
+        frame.grid(row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -1539,7 +1537,7 @@ class GuiMicroscope:
                 int(file_settings['volumes_per_buffer']))
             return None
         load_from_file_button = tk.Button(
-            self.settings_frame,
+            frame,
             text="Load from file",
             command=_load_settings_from_file,
             font=('Segoe UI', '10', 'underline'),
@@ -1565,7 +1563,7 @@ class GuiMicroscope:
                 "positions use the 'POSITION LIST' panel."))
         # label textbox:
         self.label_textbox = tkcw.Textbox(
-            self.settings_frame,
+            frame,
             label='Folder label',
             default_text='sols',
             row=1,
@@ -1579,7 +1577,7 @@ class GuiMicroscope:
                 "the date and time stamp). Edit to preference"))
         # description textbox:
         self.description_textbox = tkcw.Textbox(
-            self.settings_frame,
+            frame,
             label='Description',
             default_text='what are you doing?',
             row=2,
@@ -1594,7 +1592,7 @@ class GuiMicroscope:
                 "acquisition). Describe what you are doing here."))        
         # volumes spinbox:
         self.volumes_per_buffer = tkcw.CheckboxSliderSpinbox(
-            self.settings_frame,
+            frame,
             label='Volumes per acquire',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -1633,7 +1631,7 @@ class GuiMicroscope:
         # loop over positions:
         self.loop_over_position_list = tk.BooleanVar()
         loop_over_position_list_button = tk.Checkbutton(
-            self.settings_frame,
+            frame,
             text='Loop over position list',
             variable=self.loop_over_position_list)
         loop_over_position_list_button.grid(
@@ -1650,7 +1648,7 @@ class GuiMicroscope:
                 "(especially for a time series)."))
         # acquire number spinbox:
         self.acquire_number_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.settings_frame,
+            frame,
             label='Acquire number',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -1669,7 +1667,7 @@ class GuiMicroscope:
                 "accumulation and thermal drift can limit in practice."))
         # delay spinbox:
         self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
-            self.settings_frame,
+            frame,
             label='Inter-acquire delay (s) >=',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -1691,16 +1689,14 @@ class GuiMicroscope:
         return None
 
     def init_settings_output(self):
-        self.output_frame = tk.LabelFrame(
-            self.root, text='SETTINGS OUTPUT', bd=6)
-        self.output_frame.grid(
-            row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        frame = tk.LabelFrame(self.root, text='SETTINGS OUTPUT', bd=6)
+        frame.grid(row=3, column=5, rowspan=2, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # volumes per second textbox:
         self.volumes_per_s = tk.IntVar()
         volumes_per_s_textbox = tkcw.Textbox(
-            self.output_frame,
+            frame,
             label='Volumes per second',
             default_text='None',
             row=0,
@@ -1726,7 +1722,7 @@ class GuiMicroscope:
         # total memory textbox:
         self.total_bytes = tk.IntVar()
         total_memory_textbox = tkcw.Textbox(
-            self.output_frame,
+            frame,
             label='Total memory (GB)',
             default_text='None',
             row=1,
@@ -1755,7 +1751,7 @@ class GuiMicroscope:
         self.data_bytes = tk.IntVar()
         self.preview_bytes = tk.IntVar()
         total_storage_textbox = tkcw.Textbox(
-            self.output_frame,
+            frame,
             label='Total storage (GB)',
             default_text='None',
             row=2,
@@ -1788,7 +1784,7 @@ class GuiMicroscope:
         # min time textbox:
         self.buffer_time_s = tk.DoubleVar()
         min_time_textbox = tkcw.Textbox(
-            self.output_frame,
+            frame,
             label='Minimum acquire time (s)',
             default_text='None',
             row=3,
@@ -1825,25 +1821,13 @@ class GuiMicroscope:
         return None
 
     def init_position_list(self):
-        positions_frame = tk.LabelFrame(
-            self.root, text='POSITION LIST (Scout mode)', bd=6)
-        positions_frame.grid(
-            row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
+        frame = tk.LabelFrame(self.root, text='POSITION LIST', bd=6)
+        frame.grid(row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # set list defaults:
         self.focus_piezo_position_list = []
         self.XY_stage_position_list = []
-        def _make_empty_position_list():
-            self.focus_piezo_position_list = []
-            self.XY_stage_position_list = []
-            with open(self.session_folder +
-                      "focus_piezo_position_list.txt", "w") as file:
-                file.write(self.session_folder + '\n')
-            with open(self.session_folder +
-                  "XY_stage_position_list.txt", "w") as file:
-                file.write(self.session_folder + '\n')
-            return None
         # load from folder:
         def _load_positions_from_folder():
             # get folder from user:
@@ -1884,7 +1868,7 @@ class GuiMicroscope:
             self.total_positions_spinbox.update_and_validate(total_positions)
             return None
         load_from_folder_button = tk.Button(
-            positions_frame,
+            frame,
             text="Load from folder",
             command=_load_positions_from_folder,
             font=('Segoe UI', '10', 'underline'),
@@ -1901,12 +1885,22 @@ class GuiMicroscope:
                 "NOTE: this will overwrite any existing position list"))
         # delete all:
         def _delete_all_positions():
-            _make_empty_position_list()
+            # empty the lists:
+            self.focus_piezo_position_list = []
+            self.XY_stage_position_list = []
+            # clear the files:
+            with open(
+                self.session_folder + "focus_piezo_position_list.txt", "w"):
+                pass
+            with open(
+                self.session_folder + "XY_stage_position_list.txt", "w"):
+                pass
+            # update gui:
             self.total_positions_spinbox.update_and_validate(0)
             self.current_position_spinbox.update_and_validate(0)
-            return None        
+            return None
         delete_all_positions_button = tk.Button(
-            positions_frame,
+            frame,
             text="Delete all positions",
             command=_delete_all_positions,
             width=button_width,
@@ -1927,13 +1921,13 @@ class GuiMicroscope:
             i = self.current_position_spinbox.value.get() - 1
             self.focus_piezo_position_list.pop(i)
             self.XY_stage_position_list.pop(i)
-            # overwrite files:
-            with open(self.session_folder +
-                      "focus_piezo_position_list.txt", "w") as file:
-                file.write(self.session_folder + '\n')
-            with open(self.session_folder +
-                      "XY_stage_position_list.txt", "w") as file:
-                file.write(self.session_folder + '\n')
+            # clear the files:
+            with open(
+                self.session_folder + "focus_piezo_position_list.txt", "w"):
+                pass
+            with open(
+                self.session_folder + "XY_stage_position_list.txt", "w"):
+                pass
             # update files:
             with open(self.session_folder +
                       "focus_piezo_position_list.txt", "a") as file:
@@ -1949,7 +1943,7 @@ class GuiMicroscope:
             self.current_position_spinbox.update_and_validate(i)
             return None
         delete_current_position_button = tk.Button(
-            positions_frame,
+            frame,
             text="Delete current position",
             command=_delete_current_position,
             width=button_width,
@@ -1967,7 +1961,7 @@ class GuiMicroscope:
                 "NOTE: this operation cannot be reversed."))
         # total positions:
         self.total_positions_spinbox = tkcw.CheckboxSliderSpinbox(
-            positions_frame,
+            frame,
             label='Total positions',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -2002,7 +1996,7 @@ class GuiMicroscope:
             _update_position(1)
             return None
         move_to_start_button = tk.Button(
-            positions_frame,
+            frame,
             text="Move to start",
             command=_move_to_start,
             width=button_width,
@@ -2024,7 +2018,7 @@ class GuiMicroscope:
             _update_position(new_position)
             return None
         move_back_button = tk.Button(
-            positions_frame,
+            frame,
             text="Move back (-1)",
             command=_move_back,
             width=button_width,
@@ -2041,7 +2035,7 @@ class GuiMicroscope:
                 "position is not already at the start of the position list."))
         # current position:
         self.current_position_spinbox = tkcw.CheckboxSliderSpinbox(
-            positions_frame,
+            frame,
             label='Current position',
             checkbox_enabled=False,
             slider_enabled=False,
@@ -2071,7 +2065,7 @@ class GuiMicroscope:
             _update_position(new_position)
             return None
         move_forward_button = tk.Button(
-            positions_frame,
+            frame,
             text="Move forward (+1)",
             command=_move_forward,
             width=button_width,
@@ -2091,7 +2085,7 @@ class GuiMicroscope:
             _update_position(self.total_positions_spinbox.value.get())
             return None
         move_to_end_button = tk.Button(
-            positions_frame,
+            frame,
             text="Move to end",
             command=_move_to_end,
             width=button_width,
@@ -2126,16 +2120,15 @@ class GuiMicroscope:
         return None
 
     def init_acquire(self):
-        self.acquire_frame = tk.LabelFrame(
+        frame = tk.LabelFrame(
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
-        self.acquire_frame.grid(
-            row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         bold_width_adjust = -3
         spinbox_width = 20
         # snap volume:
         snap_volume_button = tk.Button(
-            self.acquire_frame,
+            frame,
             text="Snap volume",
             command=self._snap_and_display,
             font=('Segoe UI', '10', 'bold'),
@@ -2162,7 +2155,7 @@ class GuiMicroscope:
             return None
         self.running_live_mode = tk.BooleanVar()
         live_mode_button = tk.Checkbutton(
-            self.acquire_frame,
+            frame,
             text='Live mode (On/Off)',
             variable=self.running_live_mode,
             command=_live_mode,
@@ -2189,7 +2182,7 @@ class GuiMicroscope:
             return None
         self.running_scout_mode = tk.BooleanVar()
         scout_mode_button = tk.Checkbutton(
-            self.acquire_frame,
+            frame,
             text='Scout mode (On/Off)',
             variable=self.running_scout_mode,
             command=_scout_mode,
@@ -2224,7 +2217,7 @@ class GuiMicroscope:
                                description=self.description_textbox.text)
             return None
         save_volume_and_position_button = tk.Button(
-            self.acquire_frame,
+            frame,
             text="Save volume and position",
             command=_save_volume_and_position,
             font=('Segoe UI', '10', 'bold'),
@@ -2308,7 +2301,7 @@ class GuiMicroscope:
             return None
         self.running_acquire = tk.BooleanVar()
         acquire_button = tk.Button(
-            self.acquire_frame,
+            frame,
             text="Run acquire",
             command=_acquire,
             font=('Segoe UI', '10', 'bold'),
@@ -2338,7 +2331,7 @@ class GuiMicroscope:
             print('\n ***Acquire -> canceled*** \n')
             return None
         cancel_acquire_button = tk.Button(
-            self.acquire_frame,
+            frame,
             text="Cancel acquire",
             command=_cancel_acquire,
             width=button_width,
@@ -2355,15 +2348,15 @@ class GuiMicroscope:
         return None
 
     def init_quit(self):
-        quit_frame = tk.LabelFrame(
+        frame = tk.LabelFrame(
             self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
-        quit_frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
+        frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
         def _close():
             if self.init_microscope: self.scope.close()
             self.root.quit()
             return None
         quit_gui_button = tk.Button(
-            quit_frame,
+            frame,
             text="EXIT GUI",
             command=_close,
             height=2,
