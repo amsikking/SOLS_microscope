@@ -112,23 +112,19 @@ class GuiMicroscope:
                 '%03i_'%folder_index + self.label_textbox.text)
         return folder_name
 
-    def _set_running_mode(self, mode, enable=False): # enable=True for 'Buttons'
+    def _set_running_mode(self, mode):
         # define mode dictionary:
-        mode_to_variable = {
-            'grid_preview':self.running_grid_preview,
-            'tile_preview':self.running_tile_preview,
-            'live':self.running_live_mode,
-            'scout':self.running_scout_mode,
-            'acquire':self.running_acquire
-            }
-        variable = mode_to_variable[mode]
-        # turn everything off except current mode:
+        mode_to_variable = {'grid_preview': self.running_grid_preview,
+                            'tile_preview': self.running_tile_preview,
+                            'live_mode':    self.running_live_mode,
+                            'scout_mode':   self.running_scout_mode,
+                            'acquire':      self.running_acquire}
         for v in mode_to_variable.values():
-            if v != variable:
+            if mode is None:    # turn everything off
                 v.set(0)
-        # optionally enable the mode if not done by 'CheckButton':
-        if enable:
-            variable.set(1)
+            else:               # turn everything off except current mode
+                if v != mode_to_variable[mode]:
+                    v.set(0)
         return None
 
     def _snap_and_display(self):
@@ -1116,10 +1112,10 @@ class GuiMicroscope:
         # start grid preview:
         def _start_grid_preview():
             print('\nGrid preview -> started')
-            self._set_running_mode('grid_preview', enable=True)
+            self._set_running_mode('grid_preview')
             if self.volumes_per_buffer.value.get() != 1:
                 self.volumes_per_buffer.update_and_validate(1)
-            if not self.tile_the_grid.get():                
+            if not self.tile_the_grid.get():
                 folder_name = self._get_folder_name() + '_grid'
                 self.grid_preview_list = self.grid_list
             else:
@@ -1210,16 +1206,18 @@ class GuiMicroscope:
                     self.current_grid_preview += 1
                     self.root.after(self.gui_delay_ms, _run_grid_preview)
                 else:
-                    self.running_grid_preview.set(0)
+                    self._set_running_mode(None)
                     print('Grid preview -> finished\n')
                 return None
             _run_grid_preview()
             return None
         self.running_grid_preview = tk.BooleanVar()
-        self.start_grid_preview_button = tk.Button(
+        self.start_grid_preview_button = tk.Checkbutton(
             frame,
             text="Start grid preview (from A1)",
+            variable=self.running_grid_preview,
             command=_start_grid_preview,
+            indicatoron=0,
             font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
@@ -1235,7 +1233,7 @@ class GuiMicroscope:
                 "the grid' for extra functionality."))
         # cancel grid preview:
         def _cancel_grid_preview():
-            self.running_grid_preview.set(0)
+            self._set_running_mode(None)
             print('\n ***Grid preview -> canceled*** \n')
             return None
         cancel_grid_preview_button = tk.Button(
@@ -1298,7 +1296,7 @@ class GuiMicroscope:
         # start tile preview:
         def _start_tile_preview():
             print('\nTile preview -> started')
-            self._set_running_mode('tile_preview', enable=True)
+            self._set_running_mode('tile_preview')
             if self.volumes_per_buffer.value.get() != 1:
                 self.volumes_per_buffer.update_and_validate(1)
             folder_name = self._get_folder_name() + '_tile'
@@ -1355,17 +1353,19 @@ class GuiMicroscope:
                     self.current_tile += 1
                     self.root.after(self.gui_delay_ms, _run_tile_preview)
                 else:
-                    self.running_tile_preview.set(0)
+                    self._set_running_mode(None)
                     self.move_to_tile_button.config(state='normal')
                     print('Tile preview -> finished\n')
                 return None
             _run_tile_preview()
             return None
         self.running_tile_preview = tk.BooleanVar()
-        start_tile_preview_button = tk.Button(
+        start_tile_preview_button = tk.Checkbutton(
             frame,
             text="Start tile",
+            variable=self.running_tile_preview,
             command=_start_tile_preview,
+            indicatoron=0,
             font=('Segoe UI', '10', 'italic'),
             width=button_width,
             height=button_height)
@@ -1380,7 +1380,7 @@ class GuiMicroscope:
                 "'Save data and position' for extra functionality."))
         # cancel tile preview:
         def _cancel_tile_preview():
-            self.running_tile_preview.set(0)
+            self._set_running_mode(None)
             print('\n ***Tile preview -> canceled*** \n')
             return None
         cancel_tile_preview_button = tk.Button(
@@ -1633,7 +1633,7 @@ class GuiMicroscope:
                 "many positions so this should be taken into consideration \n" +
                 "(especially for a time series)."))
         # acquire number spinbox:
-        self.acquire_number_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.acquire_number = tkcw.CheckboxSliderSpinbox(
             frame,
             label='Acquire number',
             checkbox_enabled=False,
@@ -1643,9 +1643,9 @@ class GuiMicroscope:
             default_value=1,
             row=5,
             width=spinbox_width)
-        acquire_number_spinbox_tip = tix.Balloon(self.acquire_number_spinbox)
+        acquire_number_spinbox_tip = tix.Balloon(self.acquire_number)
         acquire_number_spinbox_tip.bind_widget(
-            self.acquire_number_spinbox,
+            self.acquire_number,
             balloonmsg=(
                 "How many acquisitions did you want when you press the \n" +
                 "'Run acquire' button?\n" +
@@ -1747,7 +1747,7 @@ class GuiMicroscope:
             positions = 1
             if self.loop_over_position_list.get():
                 positions = max(len(self.XY_stage_position_list), 1)
-            acquires = self.acquire_number_spinbox.value.get()
+            acquires = self.acquire_number.value.get()
             data_gb = 1e-9 * self.data_bytes.get()
             preview_gb = 1e-9 * self.preview_bytes.get()
             total_storage_gb = (data_gb + preview_gb) * positions * acquires
@@ -1780,7 +1780,7 @@ class GuiMicroscope:
             positions = 1
             if self.loop_over_position_list.get():
                 positions = max(len(self.XY_stage_position_list), 1)
-            acquires = self.acquire_number_spinbox.value.get()
+            acquires = self.acquire_number.value.get()
             min_acquire_time_s = self.buffer_time_s.get() * positions
             min_total_time_s = min_acquire_time_s * acquires
             if self.delay_spinbox.value.get() > min_acquire_time_s:
@@ -2103,6 +2103,7 @@ class GuiMicroscope:
         frame = tk.LabelFrame(
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
         frame.grid(row=3, column=6, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.bind('<Enter>', lambda event: frame.focus_set()) # force update
         button_width, button_height = 25, 2
         bold_width_adjust = -3
         spinbox_width = 20
@@ -2125,7 +2126,7 @@ class GuiMicroscope:
                 "NOTE: this does not save any data or position information."))
         # live mode:
         def _live_mode():
-            self._set_running_mode('live')
+            self._set_running_mode('live_mode')
             def _run_live_mode():
                 if self.running_live_mode.get():
                     self._snap_and_display()
@@ -2156,7 +2157,7 @@ class GuiMicroscope:
                 "effect use 'Scout mode'.")) 
         # scout mode:
         def _scout_mode():
-            self._set_running_mode('scout')
+            self._set_running_mode('scout_mode')
             if self.running_scout_mode.get():
                 self._snap_and_display()
             return None
@@ -2211,7 +2212,7 @@ class GuiMicroscope:
         # run acquire:
         def _acquire():
             print('\nAcquire -> started')
-            self._set_running_mode('acquire', enable=True)
+            self._set_running_mode('acquire')
             self.folder_name = self._get_folder_name() + '_acquire'
             self.description = self.description_textbox.text
             self.acquire_count = 0
@@ -2265,20 +2266,22 @@ class GuiMicroscope:
                             'gui_delay_s: %i'%self.delay_spinbox.value.get() + '\n')
                         self.saved_delay_s = True
                 # check acquire count before re-run:
-                if self.acquire_count < self.acquire_number_spinbox.value.get():
+                if self.acquire_count < self.acquire_number.value.get():
                     self.root.after(wait_ms, _run_acquire)
                 else:
                     self.scope.finish_all_tasks()
-                    self.running_acquire.set(0)
+                    self._set_running_mode(None)
                     print('Acquire -> finished\n')
                 return None
             _run_acquire()
             return None
         self.running_acquire = tk.BooleanVar()
-        acquire_button = tk.Button(
+        acquire_button = tk.Checkbutton(
             frame,
             text="Run acquire",
+            variable=self.running_acquire,
             command=_acquire,
+            indicatoron=0,
             font=('Segoe UI', '10', 'bold'),
             fg='red',
             width=button_width + bold_width_adjust,
@@ -2302,7 +2305,7 @@ class GuiMicroscope:
                 "(set 'Inter-acquire delay (s)' > the time per iteration)"))
         # cancel acquire:
         def _cancel_acquire():
-            self.running_acquire.set(0)
+            self._set_running_mode(None)
             print('\n ***Acquire -> canceled*** \n')
             return None
         cancel_acquire_button = tk.Button(
