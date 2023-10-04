@@ -880,9 +880,11 @@ class GuiMicroscope:
                     file.write('spacing_um:%i'%self.grid_um.value.get() + '\n')
                 return None
             create_button = tk.Button(
-                create_grid_popup, text="Create",
+                create_grid_popup,
+                text="Create",
                 command=_create,
-                height=button_height, width=button_width)
+                height=button_height,
+                width=button_width)
             create_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
             # exit button:
             def _exit():
@@ -890,9 +892,11 @@ class GuiMicroscope:
                 create_grid_popup.grab_release()
                 return None
             exit_button = tk.Button(
-                create_grid_popup, text="Exit",
+                create_grid_popup,
+                text="Exit",
                 command=_exit,
-                height=button_height, width=button_width)
+                height=button_height,
+                width=button_width)
             exit_button.grid(row=4, column=0, padx=10, pady=10, sticky='n')
             # create a grid list and show user:
             _create()
@@ -1054,9 +1058,11 @@ class GuiMicroscope:
                 move_to_grid_location_popup.grab_release()
                 return None
             cancel_button = tk.Button(
-                move_to_grid_location_popup, text="Cancel",
+                move_to_grid_location_popup,
+                text="Cancel",
                 command=_cancel,
-                height=button_height, width=button_width)
+                height=button_height,
+                width=button_width)
             cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
             return None
         self.move_to_grid_location_button = tk.Button(
@@ -1413,9 +1419,11 @@ class GuiMicroscope:
                 move_to_tile_popup.grab_release()
                 return None
             cancel_button = tk.Button(
-                move_to_tile_popup, text="Cancel",
+                move_to_tile_popup,
+                text="Cancel",
                 command=_cancel,
-                height=button_height, width=button_width)
+                height=button_height,
+                width=button_width)
             cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
             # make buttons:
             tile_buttons_frame = tk.LabelFrame(
