@@ -802,13 +802,13 @@ class GuiMicroscope:
                 "'sols_gui_session' folder and load these settings into \n" +
                 "the GUI.\n"
                 "NOTE: this will overwrite any existing grid parameters"))
-        # create grid:
+        # create grid popup:
         create_grid_popup = tk.Toplevel()
         create_grid_popup.title('Create grid')
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         create_grid_popup.geometry("+%d+%d" % (x + 800, y + 400))
         create_grid_popup.withdraw()
-        # user input:
+        # popup input:
         spinbox_width = 20
         self.grid_rows = tkcw.CheckboxSliderSpinbox(
             create_grid_popup,
@@ -843,86 +843,89 @@ class GuiMicroscope:
             row=2,
             width=spinbox_width,
             sticky='n')
+        # popup create button:
         def _create_grid():
-            create_grid_popup.deiconify()
-            create_grid_popup.grab_set() # force user to interact            
-            # create button:
-            def _create():
-                # tidy up any previous display:
-                if hasattr(self, 'create_grid_buttons_frame'):
-                    self.create_grid_buttons_frame.destroy()
-                # generate grid list and show buttons:
-                self.create_grid_buttons_frame = tk.LabelFrame(
-                    create_grid_popup, text='XY GRID', bd=6)
-                self.create_grid_buttons_frame.grid(
-                    row=0, column=1, rowspan=5, padx=10, pady=10)
-                self.grid_list = []
-                for r in range(self.grid_rows.value.get()):
-                    for c in range(self.grid_cols.value.get()):
-                        name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
-                        grid_button = tk.Button(
-                            self.create_grid_buttons_frame,
-                            text=name,
-                            width=5,
-                            height=2)
-                        grid_button.grid(row=r, column=c, padx=10, pady=10)
-                        grid_button.config(state='disabled')
-                        self.grid_list.append([r, c, None])
-                # set button status:
-                self.set_grid_location_button.config(state='normal')
-                self.move_to_grid_location_button.config(state='disabled')
-                self.start_grid_preview_button.config(state='disabled')
-                # overwrite grid file:
-                with open(self.session_folder +
-                          "grid_navigator_parameters.txt", "w") as file:
-                    file.write('rows:%i'%self.grid_rows.value.get() + '\n')
-                    file.write('columns:%i'%self.grid_cols.value.get() + '\n')
-                    file.write('spacing_um:%i'%self.grid_um.value.get() + '\n')
-                return None
-            create_button = tk.Button(
-                create_grid_popup,
-                text="Create",
-                command=_create,
-                height=button_height,
-                width=button_width)
-            create_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
-            # exit button:
-            def _exit():
-                create_grid_popup.withdraw()
-                create_grid_popup.grab_release()
-                return None
-            exit_button = tk.Button(
-                create_grid_popup,
-                text="Exit",
-                command=_exit,
-                height=button_height,
-                width=button_width)
-            exit_button.grid(row=4, column=0, padx=10, pady=10, sticky='n')
-            # create a grid list and show user:
-            _create()
+            # tidy up any previous display:
+            if hasattr(self, 'create_grid_buttons_frame'):
+                self.create_grid_buttons_frame.destroy()
+            # generate grid list and show buttons:
+            self.create_grid_buttons_frame = tk.LabelFrame(
+                create_grid_popup, text='XY GRID', bd=6)
+            self.create_grid_buttons_frame.grid(
+                row=0, column=1, rowspan=5, padx=10, pady=10)
+            self.grid_list = []
+            for r in range(self.grid_rows.value.get()):
+                for c in range(self.grid_cols.value.get()):
+                    name = '%s%i'%(chr(ord('@')+r + 1), c + 1)
+                    grid_button = tk.Button(
+                        self.create_grid_buttons_frame,
+                        text=name,
+                        width=5,
+                        height=2)
+                    grid_button.grid(row=r, column=c, padx=10, pady=10)
+                    grid_button.config(state='disabled')
+                    self.grid_list.append([r, c, None])
+            # set button status:
+            self.set_grid_location_button.config(state='normal')
+            self.move_to_grid_location_button.config(state='disabled')
+            self.start_grid_preview_button.config(state='disabled')
+            # overwrite grid file:
+            with open(self.session_folder +
+                      "grid_navigator_parameters.txt", "w") as file:
+                file.write('rows:%i'%self.grid_rows.value.get() + '\n')
+                file.write('columns:%i'%self.grid_cols.value.get() + '\n')
+                file.write('spacing_um:%i'%self.grid_um.value.get() + '\n')
             return None
         create_grid_button = tk.Button(
+            create_grid_popup,
+            text="Create",
+            command=_create_grid,
+            height=button_height,
+            width=button_width)
+        create_grid_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
+        # popup exit button:
+        def _exit_grid_popup():
+            create_grid_popup.withdraw()
+            create_grid_popup.grab_release()
+            return None
+        exit_grid_popup_button = tk.Button(
+            create_grid_popup,
+            text="Exit",
+            command=_exit_grid_popup,
+            height=button_height,
+            width=button_width)
+        exit_grid_popup_button.grid(
+            row=4, column=0, padx=10, pady=10, sticky='n')
+        # create grid popup button:
+        def _create_grid_popup():
+            create_grid_popup.deiconify()
+            create_grid_popup.grab_set() # force user to interact
+            # create a grid list and show user:
+            _create_grid()
+            return None
+        create_grid_popup_button = tk.Button(
             frame,
             text="Create grid",
-            command=_create_grid,
+            command=_create_grid_popup,
             width=button_width,
             height=button_height)
-        create_grid_button.grid(row=1, column=0, padx=10, pady=10)
-        create_grid_tip = tix.Balloon(create_grid_button)
+        create_grid_popup_button.grid(row=1, column=0, padx=10, pady=10)
+        create_grid_tip = tix.Balloon(create_grid_popup_button)
         create_grid_tip.bind_widget(
-            create_grid_button,
+            create_grid_popup_button,
             balloonmsg=(
                 "Use the 'Create grid' button to create a new grid \n" +
                 "of points you want to navigate (by specifying the rows, \n" +
                 "columns and spacing). For example, this tool can be used \n" +
                 "to move around multiwell plates (or any grid like sample).\n" +
                 "NOTE: this will overwrite any existing grid parameters"))
-        # set location:
+        # set location popup:
         set_grid_location_popup = tk.Toplevel()
         set_grid_location_popup.title('Set current location')
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         set_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
         set_grid_location_popup.withdraw()
+        # set location button:
         def _set_grid_location():
             set_grid_location_popup.deiconify()
             set_grid_location_popup.grab_set() # force user to interact
@@ -968,6 +971,7 @@ class GuiMicroscope:
                     width=5,
                     height=2)
                 grid_button.grid(row=r, column=c, padx=10, pady=10)
+            return None
         self.set_grid_location_button = tk.Button(
             frame,
             text="Set grid location",
@@ -1014,12 +1018,26 @@ class GuiMicroscope:
                 "NOTE: it does not display the current position and is not \n" +
                 "aware of XY moves made elsewhere (e.g. with the joystick \n" +
                 "or 'XY STAGE' panel)."))
-        # move to location:
+        # move to location popup:
         move_to_grid_location_popup = tk.Toplevel()
         move_to_grid_location_popup.title('Move to location')
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         move_to_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
         move_to_grid_location_popup.withdraw()
+        # cancel popup button:
+        def _cancel_move_to_grid_location():
+            move_to_grid_location_popup.withdraw()
+            move_to_grid_location_popup.grab_release()
+            return None
+        cancel_move_to_grid_location_button = tk.Button(
+            move_to_grid_location_popup,
+            text="Cancel",
+            command=_cancel_move_to_grid_location,
+            height=button_height,
+            width=button_width)
+        cancel_move_to_grid_location_button.grid(
+            row=1, column=0, padx=10, pady=10, sticky='n')
+        # move to location button:
         def _move_to_grid_location():
             move_to_grid_location_popup.deiconify()
             move_to_grid_location_popup.grab_set() # force user to interact
@@ -1038,7 +1056,7 @@ class GuiMicroscope:
                 if grid == 0:
                     self.start_grid_preview_button.config(state='normal')
                 # exit:
-                _cancel()
+                _cancel_move_to_grid_location()
                 return None
             for g in range(len(self.grid_list)):
                 r, c, p_mm = self.grid_list[g]
@@ -1052,18 +1070,6 @@ class GuiMicroscope:
                 grid_button.grid(row=r, column=c, padx=10, pady=10)
                 if g == self.grid_location.get():
                     grid_button.config(state='disabled')
-            # cancel button:
-            def _cancel():
-                move_to_grid_location_popup.withdraw()
-                move_to_grid_location_popup.grab_release()
-                return None
-            cancel_button = tk.Button(
-                move_to_grid_location_popup,
-                text="Cancel",
-                command=_cancel,
-                height=button_height,
-                width=button_width)
-            cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
             return None
         self.move_to_grid_location_button = tk.Button(
             frame,
@@ -1404,27 +1410,29 @@ class GuiMicroscope:
                 "preview generation.\n" +
                 "NOTE: this is not immediate since some processes must \n" +
                 "finish once launched."))        
-        # move to tile:
+        # move to tile popup:
         move_to_tile_popup = tk.Toplevel()
         move_to_tile_popup.title('Move to tile')
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))        
         move_to_tile_popup.withdraw()
+        # cancel popup:
+        def _cancel_move_to_tile():
+            move_to_tile_popup.withdraw()
+            move_to_tile_popup.grab_release()
+            return None
+        cancel_move_to_tile_button = tk.Button(
+            move_to_tile_popup,
+            text="Cancel",
+            command=_cancel_move_to_tile,
+            height=button_height,
+            width=button_width)
+        cancel_move_to_tile_button.grid(
+            row=1, column=0, padx=10, pady=10, sticky='n')
+        # move to tile button:
         def _move_to_tile():
             move_to_tile_popup.deiconify()
             move_to_tile_popup.grab_set() # force user to interact
-            # cancel button:
-            def _cancel():
-                move_to_tile_popup.withdraw()
-                move_to_tile_popup.grab_release()
-                return None
-            cancel_button = tk.Button(
-                move_to_tile_popup,
-                text="Cancel",
-                command=_cancel,
-                height=button_height,
-                width=button_width)
-            cancel_button.grid(row=1, column=0, padx=10, pady=10, sticky='n')
             # make buttons:
             tile_buttons_frame = tk.LabelFrame(
                 move_to_tile_popup, text='XY TILES', bd=6)
@@ -1434,7 +1442,7 @@ class GuiMicroscope:
                 self._update_XY_stage_position(self.tile_list[tile][2])
                 self._snap_and_display()
                 self.current_tile = tile
-                _cancel()
+                _cancel_move_to_tile()
                 return None
             for t in range(len(self.tile_list)):
                 r, c, p_mm = self.tile_list[t]
