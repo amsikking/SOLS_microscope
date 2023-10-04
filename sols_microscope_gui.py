@@ -1846,6 +1846,7 @@ class GuiMicroscope:
                 focus_piezo_position_list = file.read().splitlines()
             with open(XY_stage_file_path, 'r') as file:
                 XY_stage_position_list = file.read().splitlines()
+            assert len(focus_piezo_position_list) == len(XY_stage_position_list)
             for i, element in enumerate(focus_piezo_position_list):
                 focus_piezo_z_um = int(element.strip(','))
                 focus_piezo_position_list[i] = focus_piezo_z_um
@@ -1866,8 +1867,8 @@ class GuiMicroscope:
                 for i in range(len(XY_stage_position_list)):
                     file.write(str(XY_stage_position_list[i]) + ',\n')
             # update gui:
-            total_positions = len(self.focus_piezo_position_list)
-            self.total_positions_spinbox.update_and_validate(total_positions)
+            self.total_positions.update_and_validate(
+                len(XY_stage_position_list))
             return None
         load_from_folder_button = tk.Button(
             frame,
@@ -1898,8 +1899,8 @@ class GuiMicroscope:
                 self.session_folder + "XY_stage_position_list.txt", "w"):
                 pass
             # update gui:
-            self.total_positions_spinbox.update_and_validate(0)
-            self.current_position_spinbox.update_and_validate(0)
+            self.total_positions.update_and_validate(0)
+            self.current_position.update_and_validate(0)
             return None
         delete_all_positions_button = tk.Button(
             frame,
@@ -1918,31 +1919,24 @@ class GuiMicroscope:
                 "NOTE: this operation cannot be reversed."))
         # delete current:
         def _delete_current_position():
-            if self.total_positions_spinbox.value.get() == 0:
+            if self.total_positions.value.get() == 0:
                 return
-            i = self.current_position_spinbox.value.get() - 1
+            i = self.current_position.value.get() - 1
             self.focus_piezo_position_list.pop(i)
             self.XY_stage_position_list.pop(i)
-            # clear the files:
-            with open(
-                self.session_folder + "focus_piezo_position_list.txt", "w"):
-                pass
-            with open(
-                self.session_folder + "XY_stage_position_list.txt", "w"):
-                pass
             # update files:
             with open(self.session_folder +
-                      "focus_piezo_position_list.txt", "a") as file:
+                      "focus_piezo_position_list.txt", "w") as file:
                 for i in range(len(self.focus_piezo_position_list)):
                     file.write(str(self.focus_piezo_position_list[i]) + ',\n')
             with open(self.session_folder +
-                      "XY_stage_position_list.txt", "a") as file:
+                      "XY_stage_position_list.txt", "w") as file:
                 for i in range(len(self.XY_stage_position_list)):
                     file.write(str(self.XY_stage_position_list[i]) + ',\n')
             # update gui:
-            total_positions = len(self.focus_piezo_position_list)
-            self.total_positions_spinbox.update_and_validate(total_positions)
-            self.current_position_spinbox.update_and_validate(i)
+            self.total_positions.update_and_validate(
+                len(self.XY_stage_position_list))
+            self.current_position.update_and_validate(i)
             return None
         delete_current_position_button = tk.Button(
             frame,
@@ -1962,7 +1956,7 @@ class GuiMicroscope:
                 "folder.\n" +
                 "NOTE: this operation cannot be reversed."))
         # total positions:
-        self.total_positions_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.total_positions = tkcw.CheckboxSliderSpinbox(
             frame,
             label='Total positions',
             checkbox_enabled=False,
@@ -1972,35 +1966,50 @@ class GuiMicroscope:
             default_value=0,
             row=3,
             width=spinbox_width)
-        self.total_positions_spinbox.spinbox.config(state='disabled')
-        total_positions_spinbox_tip = tix.Balloon(
-            self.total_positions_spinbox)
+        self.total_positions.spinbox.config(state='disabled')
+        total_positions_spinbox_tip = tix.Balloon(self.total_positions)
         total_positions_spinbox_tip.bind_widget(
-            self.total_positions_spinbox,
+            self.total_positions,
             balloonmsg=(
                 "The 'Total positions' displays the total number of \n" + 
                 "positions currently stored in the position list (both in \n" +
                 "the GUI and the associated .txt files in the\n" +
                 "'sols_gui_session' folder."))
         # utility function:
-        def _update_position(position):
-            if self.total_positions_spinbox.value.get() != 0:
-                self.focus_piezo_z_um.update_and_validate(
-                    self.focus_piezo_position_list[position - 1])
-                self._update_XY_stage_position(
-                    self.XY_stage_position_list[position - 1])
-                self.current_position_spinbox.update_and_validate(position)
-                if not self.running_scout_mode.get():
-                    self._snap_and_display()
+        def _update_position(how):
+            current_position = self.current_position.value.get()
+            total_positions  = self.total_positions.value.get()
+            if total_positions == 0:
+                return
+            # check which direction:
+            if how == 'start':
+                p = 1
+            if how == 'back':
+                p = current_position - 1
+                if p < 1:
+                    p = 1
+            if how == 'forward':
+                p = current_position + 1
+                if p > total_positions:
+                    p = total_positions
+            if how == 'end':
+                p = total_positions
+            # move:
+            self.focus_piezo_z_um.update_and_validate(
+                self.focus_piezo_position_list[p - 1])
+            self._update_XY_stage_position(
+                self.XY_stage_position_list[p - 1])
+            # update gui:
+            self.current_position.update_and_validate(p)
+            # turn off scout mode and snap:
+            self.running_scout_mode.set(0)
+            self._snap_and_display()
             return None
         # move to start:
-        def _move_to_start():
-            _update_position(1)
-            return None
         move_to_start_button = tk.Button(
             frame,
             text="Move to start",
-            command=_move_to_start,
+            command=lambda d='start': _update_position(d),
             width=button_width,
             height=button_height)
         move_to_start_button.grid(row=4, column=0, padx=10, pady=10)
@@ -2013,16 +2022,10 @@ class GuiMicroscope:
                 "NOTE: this is only active in 'Scout mode' and if the \n" +
                 "position is not already at the start of the position list."))
         # move back:
-        def _move_back():
-            new_position = self.current_position_spinbox.value.get() - 1
-            if new_position < 1:
-                new_position = 1
-            _update_position(new_position)
-            return None
         move_back_button = tk.Button(
             frame,
             text="Move back (-1)",
-            command=_move_back,
+            command=lambda d='back': _update_position(d),
             width=button_width,
             height=button_height)
         move_back_button.grid(row=5, column=0, padx=10, pady=10)
@@ -2034,7 +2037,7 @@ class GuiMicroscope:
                 "and 'XY STAGE' to the previous (n - 1) position in the \n" +
                 "position list."))
         # current position:
-        self.current_position_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.current_position = tkcw.CheckboxSliderSpinbox(
             frame,
             label='Current position',
             checkbox_enabled=False,
@@ -2044,11 +2047,10 @@ class GuiMicroscope:
             default_value=0,
             row=6,
             width=spinbox_width)
-        self.current_position_spinbox.spinbox.config(state='disabled')
-        current_position_spinbox_tip = tix.Balloon(
-            self.current_position_spinbox)
+        self.current_position.spinbox.config(state='disabled')
+        current_position_spinbox_tip = tix.Balloon(self.current_position)
         current_position_spinbox_tip.bind_widget(
-            self.current_position_spinbox,
+            self.current_position,
             balloonmsg=(
                 "The 'Current position' displays the current position in \n" + 
                 "the position list based on the last update to the \n" +
@@ -2058,16 +2060,10 @@ class GuiMicroscope:
                 "the joystick or 'XY STAGE' panel). Use one of the 'move' \n" +
                 "buttons to update if needed."))
         # go forwards:
-        def _move_forward():
-            new_position = self.current_position_spinbox.value.get() + 1
-            if new_position > self.total_positions_spinbox.value.get():
-                new_position = self.total_positions_spinbox.value.get()
-            _update_position(new_position)
-            return None
         move_forward_button = tk.Button(
             frame,
             text="Move forward (+1)",
-            command=_move_forward,
+            command=lambda d='forward': _update_position(d),
             width=button_width,
             height=button_height)
         move_forward_button.grid(row=7, column=0, padx=10, pady=10)
@@ -2079,13 +2075,10 @@ class GuiMicroscope:
                 "PIEZO' and 'XY STAGE' to the next (n + 1) position in \n" +
                 "the position list."))
         # move to end:
-        def _move_to_end():
-            _update_position(self.total_positions_spinbox.value.get())
-            return None
         move_to_end_button = tk.Button(
             frame,
             text="Move to end",
-            command=_move_to_end,
+            command=lambda d='end': _update_position(d),
             width=button_width,
             height=button_height)
         move_to_end_button.grid(row=8, column=0, padx=10, pady=10)
@@ -2103,9 +2096,9 @@ class GuiMicroscope:
         self.XY_stage_position_list.append([self.X_stage_position_mm,
                                             self.Y_stage_position_mm])
         # update gui:
-        positions = len(self.focus_piezo_position_list)
-        self.total_positions_spinbox.update_and_validate(positions)
-        self.current_position_spinbox.update_and_validate(positions)
+        positions = len(self.XY_stage_position_list)
+        self.total_positions.update_and_validate(positions)
+        self.current_position.update_and_validate(positions)
         # write to file:
         with open(self.session_folder +
                   "focus_piezo_position_list.txt", "a") as file:
@@ -2233,10 +2226,10 @@ class GuiMicroscope:
             self.description = self.description_textbox.text
             self.acquire_count = 0
             self.saved_delay_s = False
-            self.current_position = 0
-            self.total_positions = 0
+            self.position = 0
+            self.num_positions = 0
             if self.loop_over_position_list.get():
-                self.total_positions = len(self.XY_stage_position_list)
+                self.num_positions = len(self.XY_stage_position_list)
             def _run_acquire():
                 if not self.running_acquire.get(): # check for cancel
                     return None
@@ -2244,22 +2237,22 @@ class GuiMicroscope:
                 wait_ms = int(round(1e3 * self.scope.buffer_time_s))
                 # check mode -> either single position or loop over positions:
                 if self.loop_over_position_list.get():
-                    if self.current_position == 0:
+                    if self.position == 0:
                         self.loop_t0_s = time.perf_counter()
                     self.focus_piezo_z_um.update_and_validate(
-                        self.focus_piezo_position_list[self.current_position])
+                        self.focus_piezo_position_list[self.position])
                     self._update_XY_stage_position(
-                        self.XY_stage_position_list[self.current_position])
-                    self.current_position_spinbox.update_and_validate(
-                        self.current_position + 1)
+                        self.XY_stage_position_list[self.position])
+                    self.current_position.update_and_validate(
+                        self.position + 1)
                     self.scope.acquire(filename='%06i_p%06i.tif'%(
-                        self.acquire_count, self.current_position),
+                        self.acquire_count, self.position),
                                        folder_name=self.folder_name,
                                        description=self.description)
-                    if self.current_position < (self.total_positions - 1):
-                        self.current_position +=1
+                    if self.position < (self.num_positions - 1):
+                        self.position +=1
                     else:
-                        self.current_position = 0
+                        self.position = 0
                         self.acquire_count += 1
                         loop_time_s = time.perf_counter() - self.loop_t0_s
                         if self.delay_spinbox.value.get() > loop_time_s:
