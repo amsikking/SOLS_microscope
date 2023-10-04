@@ -1668,7 +1668,7 @@ class GuiMicroscope:
                 "NOTE: there is no immediate limit here, but data \n"
                 "accumulation and thermal drift can limit in practice."))
         # delay spinbox:
-        self.delay_spinbox = tkcw.CheckboxSliderSpinbox(
+        self.delay_s = tkcw.CheckboxSliderSpinbox(
             frame,
             label='Inter-acquire delay (s) >=',
             checkbox_enabled=False,
@@ -1678,9 +1678,9 @@ class GuiMicroscope:
             default_value=0,
             row=6,
             width=spinbox_width)
-        delay_spinbox_tip = tix.Balloon(self.delay_spinbox)
+        delay_spinbox_tip = tix.Balloon(self.delay_s)
         delay_spinbox_tip.bind_widget(
-            self.delay_spinbox,
+            self.delay_s,
             balloonmsg=(
                 "How long do you want to wait between acquisitions?\n" +
                 "NOTE: the GUI will attempt to achieve the requested \n" +
@@ -1799,9 +1799,10 @@ class GuiMicroscope:
             acquires = self.acquire_number.value.get()
             min_acquire_time_s = self.buffer_time_s.get() * positions
             min_total_time_s = min_acquire_time_s * acquires
-            if self.delay_spinbox.value.get() > min_acquire_time_s:
-                min_total_time_s = (self.delay_spinbox.value.get() * (
-                    acquires - 1) + min_acquire_time_s)
+            delay_s = self.delay_s.value.get()
+            if delay_s > min_acquire_time_s:
+                min_total_time_s = (
+                    delay_s * (acquires - 1) + min_acquire_time_s)
             text = '%0.6f (%0.0f min)'%(
                 min_total_time_s, (min_total_time_s / 60))
             min_time_textbox.textbox.delete('1.0', '10.0')
@@ -2223,57 +2224,56 @@ class GuiMicroscope:
             print('\nAcquire -> started')
             self._set_running_mode('acquire')
             self.folder_name = self._get_folder_name() + '_acquire'
-            self.description = self.description_textbox.text
+            self.delay_saved = False
             self.acquire_count = 0
-            self.saved_delay_s = False
-            self.position = 0
-            self.num_positions = 0
-            if self.loop_over_position_list.get():
-                self.num_positions = len(self.XY_stage_position_list)
+            self.acquire_position = 0
             def _run_acquire():
                 if not self.running_acquire.get(): # check for cancel
                     return None
                 # don't launch all tasks: either wait 1 buffer time or delay:
                 wait_ms = int(round(1e3 * self.scope.buffer_time_s))
                 # check mode -> either single position or loop over positions:
-                if self.loop_over_position_list.get():
-                    if self.position == 0:
+                if not self.loop_over_position_list.get():
+                    self.scope.acquire(
+                        filename='%06i.tif'%self.acquire_count,
+                        folder_name=self.folder_name,
+                        description=self.description_textbox.text)
+                    self.acquire_count += 1
+                    if self.delay_s.value.get() > self.scope.buffer_time_s:
+                        wait_ms = int(round(1e3 * self.delay_s.value.get()))                    
+                else:
+                    if self.acquire_position == 0:
                         self.loop_t0_s = time.perf_counter()
                     self.focus_piezo_z_um.update_and_validate(
-                        self.focus_piezo_position_list[self.position])
+                        self.focus_piezo_position_list[self.acquire_position])
                     self._update_XY_stage_position(
-                        self.XY_stage_position_list[self.position])
+                        self.XY_stage_position_list[self.acquire_position])
                     self.current_position.update_and_validate(
-                        self.position + 1)
-                    self.scope.acquire(filename='%06i_p%06i.tif'%(
-                        self.acquire_count, self.position),
-                                       folder_name=self.folder_name,
-                                       description=self.description)
-                    if self.position < (self.num_positions - 1):
-                        self.position +=1
+                        self.acquire_position + 1)
+                    self.scope.acquire(
+                        filename='%06i_p%06i.tif'%(
+                            self.acquire_count, self.acquire_position),
+                        folder_name=self.folder_name,
+                        description=self.description_textbox.text)
+                    if self.acquire_position < (
+                        self.total_positions.value.get() - 1):
+                        self.acquire_position +=1
                     else:
-                        self.position = 0
+                        self.acquire_position = 0
                         self.acquire_count += 1
                         loop_time_s = time.perf_counter() - self.loop_t0_s
-                        if self.delay_spinbox.value.get() > loop_time_s:
+                        if self.delay_s.value.get() > loop_time_s:
                             wait_ms = int(round(1e3 * (
-                                self.delay_spinbox.value.get() - loop_time_s)))                   
-                else:
-                    self.scope.acquire(filename='%06i.tif'%self.acquire_count,
-                                       folder_name=self.folder_name,
-                                       description=self.description)
-                    self.acquire_count += 1
-                    if self.delay_spinbox.value.get() > self.scope.buffer_time_s:
-                        wait_ms = int(round(1e3 * self.delay_spinbox.value.get()))
+                                self.delay_s.value.get() - loop_time_s)))
                 # record gui delay:
-                if (not self.saved_delay_s and os.path.exists(
+                if (not self.delay_saved and os.path.exists(
                     self.folder_name)):
                     with open(self.folder_name + '\\'  "gui_delay_s.txt",
                               "w") as file:
                         file.write(self.folder_name + '\n')
                         file.write(
-                            'gui_delay_s: %i'%self.delay_spinbox.value.get() + '\n')
-                        self.saved_delay_s = True
+                            'gui_delay_s: %i'%self.delay_s.value.get() + '\n')
+                        self.delay_saved = True
                 # check acquire count before re-run:
                 if self.acquire_count < self.acquire_number.value.get():
                     self.root.after(wait_ms, _run_acquire)
