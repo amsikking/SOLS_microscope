@@ -43,7 +43,7 @@ class GuiMicroscope:
         self.init_settings_output() # shows output from settings
         self.init_position_list()   # navigates position lists
         self.init_acquire()         # microscope methods
-        self.init_quit()
+        self.init_exit()
         # optionally initialize microscope:
         if init_microscope:
             self.max_allocated_bytes = 100e9
@@ -2334,24 +2334,24 @@ class GuiMicroscope:
                 "finish once launched."))
         return None
 
-    def init_quit(self):
+    def init_exit(self):
         frame = tk.LabelFrame(
-            self.root, text='QUIT', font=('Segoe UI', '10', 'bold'), bd=6)
+            self.root, text='EXIT', font=('Segoe UI', '10', 'bold'), bd=6)
         frame.grid(row=5, column=6, padx=10, pady=10, sticky='n')
-        def _close():
+        def _exit():
             if self.init_microscope: self.scope.close()
             self.root.quit()
             return None
-        quit_gui_button = tk.Button(
+        exit_button = tk.Button(
             frame,
             text="EXIT GUI",
-            command=_close,
+            command=_exit,
             height=2,
             width=25)
-        quit_gui_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
-        quit_gui_button_tip = tix.Balloon(quit_gui_button)
-        quit_gui_button_tip.bind_widget(
-            quit_gui_button,
+        exit_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
+        exit_button_tip = tix.Balloon(exit_button)
+        exit_button_tip.bind_widget(
+            exit_button,
             balloonmsg=(
                 "The 'EXIT GUI' button will close down the microscope \n" +
                 "without errors. It's the right way the end the GUI session."))
