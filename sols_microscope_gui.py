@@ -765,7 +765,7 @@ class GuiMicroscope:
             self.grid_cols.update_and_validate(int(grid_data[1].split(':')[1]))
             self.grid_um.update_and_validate(int(grid_data[2].split(':')[1]))
             # show user:
-            _create_grid()
+            _create_grid_popup()
             # reset state of grid buttons:
             self.set_grid_location_button.config(state='normal')
             self.move_to_grid_location_button.config(state='disabled')
