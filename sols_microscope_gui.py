@@ -43,7 +43,8 @@ class GuiMicroscope:
         self.init_settings_output() # shows output from settings
         self.init_position_list()   # navigates position lists
         self.init_acquire()         # microscope methods
-        self.init_exit()
+        self.init_exit()            # exit the GUI
+        self.init_running_mode()    # toggles between different modes
         # optionally initialize microscope:
         if init_microscope:
             self.max_allocated_bytes = 100e9
@@ -98,41 +99,6 @@ class GuiMicroscope:
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
-
-    def _get_folder_name(self):
-        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
-        folder_index = 0
-        folder_name = (
-            self.session_folder + dt +
-            '%03i_'%folder_index + self.label_textbox.text)
-        while os.path.exists(folder_name): # check before overwriting
-            folder_index +=1
-            folder_name = (
-                self.session_folder + dt +
-                '%03i_'%folder_index + self.label_textbox.text)
-        return folder_name
-
-    def _set_running_mode(self, mode):
-        # define mode dictionary:
-        mode_to_variable = {'grid_preview': self.running_grid_preview,
-                            'tile_preview': self.running_tile_preview,
-                            'live_mode':    self.running_live_mode,
-                            'scout_mode':   self.running_scout_mode,
-                            'acquire':      self.running_acquire}
-        for v in mode_to_variable.values():
-            if mode is None:    # turn everything off
-                v.set(0)
-            else:               # turn everything off except current mode
-                if v != mode_to_variable[mode]:
-                    v.set(0)
-        return None
-
-    def _snap_and_display(self):
-        if self.volumes_per_buffer.value.get() != 1:
-            self.volumes_per_buffer.update_and_validate(1)
-        self.last_acquire_task.join()# don't accumulate
-        self.last_acquire_task = self.scope.acquire()
-        return None
 
     def init_transmitted_light(self):
         frame = tk.LabelFrame(self.root, text='TRANSMITTED LIGHT', bd=6)
@@ -520,6 +486,13 @@ class GuiMicroscope:
             row=3, column=0, padx=10, pady=10, sticky='e')
         return None
 
+    def _snap_and_display(self):
+        if self.volumes_per_buffer.value.get() != 1:
+            self.volumes_per_buffer.update_and_validate(1)
+        self.last_acquire_task.join()# don't accumulate
+        self.last_acquire_task = self.scope.acquire()
+        return None
+
     def init_focus_piezo(self):
         frame = tk.LabelFrame(self.root, text='FOCUS PIEZO', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
@@ -759,6 +732,19 @@ class GuiMicroscope:
             XY_mm[1] != self.Y_stage_position_mm)):
             self._update_XY_stage_position(XY_mm)
         return None
+
+    def _get_folder_name(self):
+        dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
+        folder_index = 0
+        folder_name = (
+            self.session_folder + dt +
+            '%03i_'%folder_index + self.label_textbox.text)
+        while os.path.exists(folder_name): # check before overwriting
+            folder_index +=1
+            folder_name = (
+                self.session_folder + dt +
+                '%03i_'%folder_index + self.label_textbox.text)
+        return folder_name
 
     def init_grid_navigator(self):
         frame = tk.LabelFrame(self.root, text='GRID NAVIGATOR', bd=6)
@@ -1218,7 +1204,7 @@ class GuiMicroscope:
                     self.current_grid_preview += 1
                     self.root.after(self.gui_delay_ms, _run_grid_preview)
                 else:
-                    self._set_running_mode(None)
+                    self._set_running_mode('None')
                     print('Grid preview -> finished\n')
                 return None
             _run_grid_preview()
@@ -1243,26 +1229,6 @@ class GuiMicroscope:
                 "generate previews for the whole grid of points (starting \n" +
                 "at A1). Consider using 'Save data and position' and 'Tile \n" +
                 "the grid' for extra functionality."))
-        # cancel grid preview:
-        def _cancel_grid_preview():
-            self._set_running_mode(None)
-            print('\n ***Grid preview -> canceled*** \n')
-            return None
-        cancel_grid_preview_button = tk.Button(
-            frame,
-            text="Cancel grid preview",
-            command=_cancel_grid_preview,
-            width=button_width,
-            height=button_height)
-        cancel_grid_preview_button.grid(row=8, column=0, padx=10, pady=10)
-        cancel_grid_preview_tip = tix.Balloon(cancel_grid_preview_button)
-        cancel_grid_preview_tip.bind_widget(
-            cancel_grid_preview_button,
-            balloonmsg=(
-                "The 'Cancel grid preview' button will cancel any ongoing \n" +
-                "grid preview generation.\n" +
-                "NOTE: this is not immediate since some processes must \n" +
-                "finish once launched."))
         return None
 
     def init_tile_navigator(self):
@@ -1365,7 +1331,7 @@ class GuiMicroscope:
                     self.current_tile += 1
                     self.root.after(self.gui_delay_ms, _run_tile_preview)
                 else:
-                    self._set_running_mode(None)
+                    self._set_running_mode('None')
                     self.move_to_tile_button.config(state='normal')
                     print('Tile preview -> finished\n')
                 return None
@@ -1389,27 +1355,7 @@ class GuiMicroscope:
                 "The 'Start tile' button will start to generate previews \n" +
                 "for the tile array using the current XY position as the \n" +
                 "first tile (the top left position r0c0). Consider using \n" +
-                "'Save data and position' for extra functionality."))
-        # cancel tile preview:
-        def _cancel_tile_preview():
-            self._set_running_mode(None)
-            print('\n ***Tile preview -> canceled*** \n')
-            return None
-        cancel_tile_preview_button = tk.Button(
-            frame,
-            text="Cancel tile",
-            command=_cancel_tile_preview,
-            width=button_width,
-            height=button_height)
-        cancel_tile_preview_button.grid(row=3, column=0, padx=10, pady=10)
-        cancel_tile_preview_tip = tix.Balloon(cancel_tile_preview_button)
-        cancel_tile_preview_tip.bind_widget(
-            cancel_tile_preview_button,
-            balloonmsg=(
-                "The 'Cancel tile' button will cancel any ongoing tile\n" +
-                "preview generation.\n" +
-                "NOTE: this is not immediate since some processes must \n" +
-                "finish once launched."))        
+                "'Save data and position' for extra functionality."))        
         # move to tile popup:
         move_to_tile_popup = tk.Toplevel()
         move_to_tile_popup.title('Move to tile')
@@ -2279,7 +2225,7 @@ class GuiMicroscope:
                     self.root.after(wait_ms, _run_acquire)
                 else:
                     self.scope.finish_all_tasks()
-                    self._set_running_mode(None)
+                    self._set_running_mode('None')
                     print('Acquire -> finished\n')
                 return None
             _run_acquire()
@@ -2312,26 +2258,6 @@ class GuiMicroscope:
                 "> 1).\n"
                 "- a time delay between successive iterations of the above \n" +
                 "(set 'Inter-acquire delay (s)' > the time per iteration)"))
-        # cancel acquire:
-        def _cancel_acquire():
-            self._set_running_mode(None)
-            print('\n ***Acquire -> canceled*** \n')
-            return None
-        cancel_acquire_button = tk.Button(
-            frame,
-            text="Cancel acquire",
-            command=_cancel_acquire,
-            width=button_width,
-            height=button_height)
-        cancel_acquire_button.grid(row=5, column=0, padx=10, pady=10)
-        cancel_acquire_button_tip = tix.Balloon(cancel_acquire_button)
-        cancel_acquire_button_tip.bind_widget(
-            cancel_acquire_button,
-            balloonmsg=(
-                "The 'Cancel acquire' button will cancel any ongoing \n" +
-                "acquisition.\n" +
-                "NOTE: this is not immediate since some processes must \n" +
-                "finish once launched."))
         return None
 
     def init_exit(self):
@@ -2355,6 +2281,59 @@ class GuiMicroscope:
             balloonmsg=(
                 "The 'EXIT GUI' button will close down the microscope \n" +
                 "without errors. It's the right way the end the GUI session."))
+        return None
+
+    def init_running_mode(self):
+        # define mode variable and dictionary:
+        self.running_mode = tk.StringVar()
+        self.mode_to_variable = {'grid_preview': self.running_grid_preview,
+                                 'tile_preview': self.running_tile_preview,
+                                 'live_mode':    self.running_live_mode,
+                                 'scout_mode':   self.running_scout_mode,
+                                 'acquire':      self.running_acquire}        
+        # cancel running mode popup:
+        self.cancel_running_mode_popup = tk.Toplevel()
+        self.cancel_running_mode_popup.title('Cancel current process')
+        x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
+        self.cancel_running_mode_popup.geometry("+%d+%d" % (x + 1200, y + 600))
+        self.cancel_running_mode_popup.withdraw()
+        # cancel button:
+        def _cancel():
+            print('\n *** Canceled -> ' + self.running_mode.get() + ' *** \n')
+            self._set_running_mode('None')
+            return None
+        self.cancel_running_mode_button = tk.Button(
+            self.cancel_running_mode_popup,
+            font=('Segoe UI', '10', 'bold'),
+            bg='red',
+            command=_cancel,
+            width=25,
+            height=2)
+        self.cancel_running_mode_button.grid(row=8, column=0, padx=10, pady=10)
+        cancel_running_mode_tip = tix.Balloon(self.cancel_running_mode_button)
+        cancel_running_mode_tip.bind_widget(
+            self.cancel_running_mode_button,
+            balloonmsg=(
+                "Cancel the current process.\n" +
+                "NOTE: this is not immediate since some processes must \n" +
+                "finish once launched."))
+        return None
+
+    def _set_running_mode(self, mode):
+        self.running_mode.set(mode)
+        for v in self.mode_to_variable.values():
+            if mode == 'None':  # turn everything off
+                v.set(0)
+                self.cancel_running_mode_popup.withdraw()
+                self.cancel_running_mode_popup.grab_release()
+            else:               # turn everything off except current mode
+                if v != self.mode_to_variable[mode]:
+                    v.set(0)
+        if mode in ('grid_preview', 'tile_preview', 'acquire'):
+            self.cancel_running_mode_button.config(
+                text=('Cancel: ' + self.running_mode.get()))
+            self.cancel_running_mode_popup.deiconify()
+            self.cancel_running_mode_popup.grab_set()
         return None
 
 if __name__ == '__main__':
