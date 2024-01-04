@@ -17,7 +17,7 @@ try:
     import ni_PXIe_6739         # github.com/amsikking/ni_PXIe_6739
     import sutter_Lambda_10_3   # github.com/amsikking/sutter_Lambda_10_3
     import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
-    import pi_E_753_1CD         # github.com/amsikking/pi_E_753_1CD
+    import pi_E_709_1C1L        # github.com/amsikking/pi_E_709_1C1L
     import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
     import thorlabs_KSC101      # github.com/amsikking/thorlabs_KSC101
     # https://github.com/amsikking/coherent_OBIS_LSLX_laser_box
@@ -151,8 +151,8 @@ class Microscope:
 
     def _init_focus_piezo(self):
         if self.verbose: print("\n%s: opening focus piezo..."%self.name)
-        self.focus_piezo = pi_E_753_1CD.Controller(
-            which_port='COM6', verbose=False)
+        self.focus_piezo = pi_E_709_1C1L.Controller(
+            which_port='COM9', z_min_um=0, z_max_um=400, verbose=False)
         if self.verbose: print("\n%s: -> focus piezo open."%self.name)
         atexit.register(self.focus_piezo.close)
 
