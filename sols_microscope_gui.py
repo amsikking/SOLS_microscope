@@ -221,10 +221,9 @@ class GuiMicroscope:
                 "Search the part number to see the specification."))
         inner_frame = tk.LabelFrame(frame, text='fixed')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
-        dichroic_mirror_options = ( # copy paste from sols_microscope
-            'ZT405/488/561/640rpc',)
+        dichroic_mirror_options = tuple(sols.dichroic_mirror_options.keys())
         dichroic_mirror = tk.StringVar()
-        dichroic_mirror.set('ZT405/488/561/640rpc') # set default
+        dichroic_mirror.set(dichroic_mirror_options[0]) # set default
         option_menu = tk.OptionMenu(
             inner_frame,
             dichroic_mirror,
@@ -245,19 +244,9 @@ class GuiMicroscope:
                 "Search the part numbers to see the specifications."))
         inner_frame = tk.LabelFrame(frame, text='choice')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
-        emission_filter_options = ( # copy paste from sols_microscope
-            'Shutter',
-            'Open',
-            'ET450/50M',
-            'ET525/50M',
-            'ET600/50M',
-            'ET690/50M',
-            'ZET405/488/561/640m',
-            'LP02-488RU',
-            'LP02-561RU',
-            '(unused)')
+        emission_filter_options = tuple(sols.emission_filter_options.keys())
         self.emission_filter = tk.StringVar()
-        self.emission_filter.set('ZET405/488/561/640m') # set default
+        self.emission_filter.set(emission_filter_options[6]) # set default
         option_menu = tk.OptionMenu(
             inner_frame,
             self.emission_filter,
