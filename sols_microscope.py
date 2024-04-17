@@ -79,10 +79,10 @@ class Microscope:
         slow_lasers_init.get_result()
         slow_camera_init.get_result()
         slow_fw_init.get_result()
-        # configure:
-        self.illumination_sources = ( # configure as needed
-            'LED', '405', '488', '561', '640', '405_on_during_rolling')
+        # set defaults:
         self.dichroic_mirror = tuple(dichroic_mirror_options.keys())[0]
+        self.timestamp_mode = "binary+ASCII"
+        self.camera._set_timestamp_mode(self.timestamp_mode) # default on        
         self.max_bytes_per_buffer = (2**31) # legal tiff
         self.max_data_buffers = 4 # camera, preview, display, filesave
         self.max_preview_buffers = self.max_data_buffers
@@ -92,26 +92,27 @@ class Microscope:
         self.preview_crop_px = 3 # crop top and bottom pixel rows for previews
         self.num_active_data_buffers = 0
         self.num_active_preview_buffers = 0
-        self.timestamp_mode = "binary+ASCII"
-        self.camera._set_timestamp_mode(self.timestamp_mode) # default on
         self._settings_applied = False
         if self.verbose: print("\n%s: -> open and ready."%self.name)
 
     def _init_ao(self, ao_rate):
+        self.illumination_sources = ( # controlled by ao
+            'LED', '405', '488', '561', '640', '405_on_during_rolling')
         self.names_to_voltage_channels = {
-            'camera': 0,
-            'galvo': 4,
-            'snoutfocus_piezo': 6,
-            'snoutfocus_shutter': 7,
-            'LED_power': 12,
-            '405_TTL': 16,
-            '405_power': 17,
-            '488_TTL': 20,
-            '488_power': 21,
-            '561_TTL': 24,
-            '561_power': 25,
-            '640_TTL': 28,
-            '640_power': 29,}
+            'camera':               0,
+            'galvo':                4,
+            'snoutfocus_piezo':     6,
+            'snoutfocus_shutter':   7,
+            'LED_power':            12,
+            '405_TTL':              16,
+            '405_power':            17,
+            '488_TTL':              20,
+            '488_power':            21,
+            '561_TTL':              24,
+            '561_power':            25,
+            '640_TTL':              28,
+            '640_power':            29,
+            }
         if self.verbose: print("\n%s: opening ao card..."%self.name)
         self.ao = ni_PXIe_6739.DAQ(
             num_channels=30, rate=ao_rate, verbose=False)
