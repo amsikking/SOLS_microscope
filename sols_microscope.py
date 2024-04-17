@@ -1032,7 +1032,7 @@ if __name__ == '__main__':
         volumes_per_buffer=1,
         focus_piezo_z_um=(0,'relative'),
         XY_stage_position_mm=(0,0,'relative'),
-        ).join()
+        ).get_result()
 
     # Run snoutfocus and acquire:
     folder_label = 'sols_test_data'
