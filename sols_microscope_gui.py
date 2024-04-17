@@ -64,7 +64,8 @@ class GuiMicroscope:
                 scan_range_um        = self.scan_range_um.value.get(),
                 volumes_per_buffer   = self.volumes_per_buffer.value.get(),
                 focus_piezo_z_um     = (0, 'relative'),
-                XY_stage_position_mm = (0, 0, 'relative')).join() # finish
+                XY_stage_position_mm = (0, 0, 'relative')
+                ).get_result() # finish
             # get XYZ direct from hardware and update gui to aviod motion:
             self.focus_piezo_z_um.update_and_validate(
                 int(round(self.scope.focus_piezo.z)))
@@ -72,7 +73,7 @@ class GuiMicroscope:
                 [self.scope.XY_stage.x, self.scope.XY_stage.y])
             # check microscope periodically:
             def _run_check_microscope():
-                self.scope.apply_settings().join() # update attributes
+                self.scope.apply_settings().get_result() # update attributes
                 self.volumes_per_s.set(self.scope.volumes_per_s)
                 self.total_bytes.set(self.scope.total_bytes)
                 self.data_bytes.set(self.scope.bytes_per_data_buffer)
@@ -261,7 +262,7 @@ class GuiMicroscope:
 
     def init_camera(self):
         frame = tk.LabelFrame(self.root, text='CAMERA', bd=6)
-        frame.grid(row=1, column=1, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=1, column=1, rowspan=4, padx=10, pady=10, sticky='n')
         # illumination_time_us:
         self.illumination_time_us = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -318,7 +319,7 @@ class GuiMicroscope:
             frame,
             label='width pixels',
             checkbox_enabled=False,
-            slider_length=240,
+            slider_length=260,
             tickinterval=4,
             min_value=60,
             max_value=1000,
@@ -478,7 +479,7 @@ class GuiMicroscope:
     def _snap_and_display(self):
         if self.volumes_per_buffer.value.get() != 1:
             self.volumes_per_buffer.update_and_validate(1)
-        self.last_acquire_task.join()# don't accumulate
+        self.last_acquire_task.get_result()# don't accumulate
         self.last_acquire_task = self.scope.acquire()
         return None
 
@@ -737,7 +738,7 @@ class GuiMicroscope:
 
     def init_grid_navigator(self):
         frame = tk.LabelFrame(self.root, text='GRID NAVIGATOR', bd=6)
-        frame.grid(row=1, column=4, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=1, column=4, rowspan=5, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -1148,7 +1149,7 @@ class GuiMicroscope:
                     filename=filename,
                     folder_name=folder_name,
                     description=self.description_textbox.text,
-                    preview_only=preview_only).join()
+                    preview_only=preview_only).get_result()
                 grid_preview_filename = (folder_name + '\preview\\' + filename)
                 while not os.path.isfile(grid_preview_filename):
                     self.root.after(self.gui_delay_ms)
@@ -1293,7 +1294,7 @@ class GuiMicroscope:
                     filename=filename,
                     folder_name=folder_name,
                     description=self.description_textbox.text,
-                    preview_only=preview_only).join()
+                    preview_only=preview_only).get_result()
                 tile_filename = (folder_name + '\preview\\' + filename)
                 while not os.path.isfile(tile_filename):
                     self.root.after(self.gui_delay_ms)
@@ -1410,7 +1411,7 @@ class GuiMicroscope:
 
     def init_settings(self):
         frame = tk.LabelFrame(self.root, text='SETTINGS (misc)', bd=6)
-        frame.grid(row=1, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=1, column=5, rowspan=5, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # load from file:
@@ -1760,7 +1761,7 @@ class GuiMicroscope:
 
     def init_position_list(self):
         frame = tk.LabelFrame(self.root, text='POSITION LIST', bd=6)
-        frame.grid(row=1, column=6, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=1, column=6, rowspan=5, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # set list defaults:
@@ -2132,7 +2133,7 @@ class GuiMicroscope:
                 self.volumes_per_buffer.update_and_validate(1)
             self._update_position_list()
             folder_name = self._get_folder_name() + '_snap'
-            self.last_acquire_task.join() # don't accumulate acquires
+            self.last_acquire_task.get_result() # don't accumulate acquires
             self.scope.acquire(filename='snap.tif',
                                folder_name=folder_name,
                                description=self.description_textbox.text)
