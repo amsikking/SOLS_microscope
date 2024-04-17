@@ -27,7 +27,7 @@ if __name__ == '__main__': # required block for sols_microscope
         volumes_per_buffer=1,                   # usually 1, can be more...
         focus_piezo_z_um=(0,'relative'),        # = don't move
         XY_stage_position_mm=(0,0,'relative'),  # = don't move
-        ).join()
+        ).get_result()
     
     # Get current XY position for moving back at the end of the script:
     x_mm_0, y_mm_0 = scope.XY_stage_position_mm
