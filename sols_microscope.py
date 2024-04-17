@@ -1,29 +1,29 @@
 # Imports from the python standard library:
-import time
-import os
-from datetime import datetime
 import atexit
+import os
 import queue
+import time
+from datetime import datetime
 
 # Third party imports, installable via pip:
+import napari
 import numpy as np
 from scipy.ndimage import zoom, rotate, gaussian_filter1d
 from tifffile import imread, imwrite
-import napari
 
 # Our code, one .py file per module, copy files to your local directory:
 try:
-    import pco_edge42_cl        # github.com/amsikking/pco_edge42_cl
-    import ni_PXIe_6739         # github.com/amsikking/ni_PXIe_6739
-    import sutter_Lambda_10_3   # github.com/amsikking/sutter_Lambda_10_3
-    import pi_C_867_2U2         # github.com/amsikking/pi_C_867_2U2
-    import pi_E_709_1C1L        # github.com/amsikking/pi_E_709_1C1L
-    import thorlabs_MDT694B     # github.com/amsikking/thorlabs_MDT694B
-    import thorlabs_KSC101      # github.com/amsikking/thorlabs_KSC101
     # https://github.com/amsikking/coherent_OBIS_LSLX_laser_box
     import coherent_OBIS_LSLX_laser_box
-    import shm_win_patch        # github.com/amsikking/shm_win_patch
-    import concurrency_tools as ct              # github.com/AndrewGYork/tools
+    import concurrency_tools as ct  # github.com/AndrewGYork/tools
+    import ni_PXIe_6739             # github.com/amsikking/ni_PXIe_6739
+    import pco_edge42_cl            # github.com/amsikking/pco_edge42_cl
+    import pi_C_867_2U2             # github.com/amsikking/pi_C_867_2U2
+    import pi_E_709_1C1L            # github.com/amsikking/pi_E_709_1C1L
+    import shm_win_patch            # github.com/amsikking/shm_win_patch
+    import sutter_Lambda_10_3       # github.com/amsikking/sutter_Lambda_10_3
+    import thorlabs_KSC101          # github.com/amsikking/thorlabs_KSC101
+    import thorlabs_MDT694B         # github.com/amsikking/thorlabs_MDT694B
     from napari_in_subprocess import display    # github.com/AndrewGYork/tools
 except Exception as e:
     print('sols_microscope.py -> One or more imports failed')
@@ -95,6 +95,63 @@ class Microscope:
         self._settings_applied = False
         if self.verbose: print("\n%s: -> open and ready."%self.name)
 
+    def _init_filter_wheel(self):
+        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
+        self.filter_wheel = sutter_Lambda_10_3.Controller(
+            which_port='COM3', verbose=False)
+        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
+        atexit.register(self.filter_wheel.close)
+
+    def _init_camera(self):
+        if self.verbose: print("\n%s: opening camera..."%self.name)
+        self.camera = ct.ObjectInSubprocess(
+            pco_edge42_cl.Camera, verbose=False, close_method_name='close')
+        if self.verbose: print("\n%s: -> camera open."%self.name)
+
+    def _init_lasers(self):
+        if self.verbose: print("\n%s: opening lasers..."%self.name)
+        self.lasers = coherent_OBIS_LSLX_laser_box.Controller(
+            which_port='COM4', control_mode='analog', verbose=False)
+        for laser in self.lasers.lasers:
+            self.lasers.set_enable('ON', laser)
+        if self.verbose: print("\n%s: -> lasers open."%self.name)
+
+    def _init_snoutfocus(self):
+        if self.verbose: print("\n%s: opening snoutfocus piezo..."%self.name)
+        self.snoutfocus_piezo = thorlabs_MDT694B.Controller(
+            which_port='COM7', verbose=False)
+        if self.verbose: print("\n%s: -> snoutfocus piezo open."%self.name)
+        self.snoutfocus_shutter = thorlabs_KSC101.Controller(
+            'COM14', mode='trigger', verbose=False)
+        self.snoutfocus_shutter.set_state('open', block=False)
+        if self.verbose: print("\n%s: -> snoutfocus shutter open."%self.name)
+        atexit.register(self.snoutfocus_piezo.close)
+        atexit.register(self.snoutfocus_shutter.close)
+
+    def _init_focus_piezo(self):
+        if self.verbose: print("\n%s: opening focus piezo..."%self.name)
+        self.focus_piezo = pi_E_709_1C1L.Controller(
+            which_port='COM9', z_min_um=0, z_max_um=400, verbose=False)
+        if self.verbose: print("\n%s: -> focus piezo open."%self.name)
+        atexit.register(self.focus_piezo.close)
+
+    def _init_XY_stage(self):
+        if self.verbose: print("\n%s: opening XY stage..."%self.name)        
+        self.XY_stage = pi_C_867_2U2.Controller(
+            which_port='COM5', verbose=False)
+        if self.verbose: print("\n%s: -> XY stage open."%self.name)
+        atexit.register(self.XY_stage.close)
+
+    def _init_display(self):
+        if self.verbose: print("\n%s: opening display..."%self.name)  
+        self.display = display(display_type=_CustomNapariDisplay)
+        if self.verbose: print("\n%s: -> display open."%self.name) 
+
+    def _init_datapreview(self):
+        if self.verbose: print("\n%s: opening datapreview..."%self.name) 
+        self.datapreview = ct.ObjectInSubprocess(DataPreview)
+        if self.verbose: print("\n%s: -> datapreview open."%self.name) 
+
     def _init_ao(self, ao_rate):
         self.illumination_sources = ( # controlled by ao
             'LED', '405', '488', '561', '640', '405_on_during_rolling')
@@ -118,63 +175,6 @@ class Microscope:
             num_channels=30, rate=ao_rate, verbose=False)
         if self.verbose: print("\n%s: -> ao card open."%self.name)
         atexit.register(self.ao.close)
-
-    def _init_snoutfocus(self):
-        if self.verbose: print("\n%s: opening snoutfocus piezo..."%self.name)
-        self.snoutfocus_piezo = thorlabs_MDT694B.Controller(
-            which_port='COM7', verbose=False)
-        if self.verbose: print("\n%s: -> snoutfocus piezo open."%self.name)
-        self.snoutfocus_shutter = thorlabs_KSC101.Controller(
-            'COM14', mode='trigger', verbose=False)
-        self.snoutfocus_shutter.set_state('open', block=False)
-        if self.verbose: print("\n%s: -> snoutfocus shutter open."%self.name)
-        atexit.register(self.snoutfocus_piezo.close)
-        atexit.register(self.snoutfocus_shutter.close)
-
-    def _init_lasers(self):
-        if self.verbose: print("\n%s: opening lasers..."%self.name)
-        self.lasers = coherent_OBIS_LSLX_laser_box.Controller(
-            which_port='COM4', control_mode='analog', verbose=False)
-        for laser in self.lasers.lasers:
-            self.lasers.set_enable('ON', laser)
-        if self.verbose: print("\n%s: -> lasers open."%self.name)
-
-    def _init_filter_wheel(self):
-        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
-        self.filter_wheel = sutter_Lambda_10_3.Controller(
-            which_port='COM3', verbose=False)
-        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
-        atexit.register(self.filter_wheel.close)
-
-    def _init_camera(self):
-        if self.verbose: print("\n%s: opening camera..."%self.name)
-        self.camera = ct.ObjectInSubprocess(
-            pco_edge42_cl.Camera, verbose=False, close_method_name='close')
-        if self.verbose: print("\n%s: -> camera open."%self.name)
-
-    def _init_focus_piezo(self):
-        if self.verbose: print("\n%s: opening focus piezo..."%self.name)
-        self.focus_piezo = pi_E_709_1C1L.Controller(
-            which_port='COM9', z_min_um=0, z_max_um=400, verbose=False)
-        if self.verbose: print("\n%s: -> focus piezo open."%self.name)
-        atexit.register(self.focus_piezo.close)
-
-    def _init_XY_stage(self):
-        if self.verbose: print("\n%s: opening XY stage..."%self.name)        
-        self.XY_stage = pi_C_867_2U2.Controller(
-            which_port='COM5', verbose=False)
-        if self.verbose: print("\n%s: -> XY stage open."%self.name)
-        atexit.register(self.XY_stage.close)
-
-    def _init_datapreview(self):
-        if self.verbose: print("\n%s: opening datapreview..."%self.name) 
-        self.datapreview = ct.ObjectInSubprocess(DataPreview)
-        if self.verbose: print("\n%s: -> datapreview open."%self.name)        
-
-    def _init_display(self):
-        if self.verbose: print("\n%s: opening display..."%self.name)  
-        self.display = display(display_type=_CustomNapariDisplay)
-        if self.verbose: print("\n%s: -> display open."%self.name) 
 
     def _check_memory(self):        
         memory_exceeded = False
@@ -355,6 +355,113 @@ class Microscope:
         assert isinstance(shared_numpy_array, ct.SharedNDArray)
         self.num_active_preview_buffers -= 1
 
+    def snoutfocus(self, filename=None, settle_vibrations=True):
+        def snoutfocus_task(custody):
+            custody.switch_from(None, to=self.camera) # Safe to change settings
+            if not self._settings_applied:
+                print("\n%s: ***WARNING*** -> settings not applied"%self.name)
+                print("%s: -> please apply legal settings"%self.name)
+                print("%s: (all arguments must be specified at least once)")
+                custody.switch_from(self.camera, to=None)
+                return
+            self._settings_applied = False # In case the thread crashes
+            # Record the settings we'll have to reset:
+            old_fw_pos = emission_filter_options[self.emission_filter]
+            old_images = self.camera.num_images
+            old_exp_us = self.camera.exposure_us
+            old_roi_px = self.camera.roi_px
+            old_timestamp = self.camera.timestamp_mode
+            old_voltages = self.voltages
+            # Get microscope settings ready to take our measurement:
+            self.filter_wheel.move(emission_filter_options['Open'], block=False)
+            self.snoutfocus_piezo.set_voltage(0, block=False) # fw slower
+            piezo_limit_v = 150 # 15 um for current piezo
+            piezo_step_v = 2 # 200 nm steps
+            piezo_voltages = np.arange(
+                0, piezo_limit_v + piezo_step_v, piezo_step_v)
+            images = len(piezo_voltages)
+            self.camera.num_images = images # update attribute
+            roi_px = {'left': 901, 'right': 1160, 'top': 901, 'bottom': 1148}
+            self.camera._disarm()
+            self.camera._set_roi(roi_px)
+            self.camera._set_exposure_time_us(100)
+            self.camera._set_timestamp_mode('off')
+            self.camera._arm(self.camera._num_buffers)
+            # Calculate voltages for the analog-out card:
+            exp_px = self.ao.s2p(1e-6*self.camera.exposure_us)
+            roll_px = self.ao.s2p(1e-6*self.camera.rolling_time_us)
+            jitter_px = max(self.ao.s2p(30e-6), 1)
+            piezo_settling_px = self.ao.s2p(0.000) # Not yet measured
+            period_px = (max(exp_px, roll_px, piezo_settling_px) + jitter_px)
+            n2c = self.names_to_voltage_channels # A temporary nickname
+            v_open_shutter = np.zeros((self.ao.s2p(5*1e-3), # Shutter open time
+                                       self.ao.num_channels), 'float64')
+            v_open_shutter[:, n2c['snoutfocus_shutter']] = 5
+            voltages = [v_open_shutter] # insert the shutter open array first
+            for piezo_voltage in piezo_voltages:
+                v = np.zeros((period_px, self.ao.num_channels), 'float64')
+                v[:, n2c['snoutfocus_shutter']] = 5
+                v[:roll_px, n2c['camera']] = 5
+                v[:, n2c['snoutfocus_piezo']] = (
+                    10 * (piezo_voltage / piezo_limit_v)) # 10 V
+                voltages.append(v)
+            voltages = np.concatenate(voltages, axis=0)
+            # Allocate memory and finalize microscope settings:
+            data_buffer = self._get_data_buffer(
+                (images, self.camera.height_px, self.camera.width_px), 'uint16')
+            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
+            self.filter_wheel._finish_moving()
+            # Take pictures while moving the snoutfocus piezo:
+            camera_thread = ct.ResultThread(
+                target=self.camera.record_to_memory,
+                kwargs={'allocated_memory': data_buffer,
+                        'software_trigger': False},).start()
+            self.ao.play_voltages(voltages, block=False) # Ends at 0 V
+            camera_thread.get_result()
+            # Start cleaning up after ourselves:
+            write_voltages_thread = ct.ResultThread(
+                target=self.ao._write_voltages,
+                args=(old_voltages,)).start()
+            self.filter_wheel.move(old_fw_pos, block=False)
+            # Inspect the images to find/set best snoutfocus piezo position:
+            if np.max(data_buffer) < 5 * np.min(data_buffer):
+                print('\n%s: WARNING snoutfocus laser intensity low:'%self.name)
+                print('%s: -> is the laser powered up?'%self.name)
+            v = piezo_step_v * np.unravel_index(
+                np.argmax(data_buffer), data_buffer.shape)[0]
+            if (v == 0 or v == piezo_limit_v):
+                print('\n%s: WARNING snoutfocus piezo out of range!'%self.name)
+            self.snoutfocus_piezo.set_voltage(v, block=False)
+            if self.verbose:
+                print('\n%s: snoutfocus piezo voltage = %0.2f'%(self.name, v))
+            # Finish cleaning up after ourselves:
+            self.camera.num_images = old_images
+            self.camera._disarm()
+            self.camera._set_roi(old_roi_px)
+            self.camera._set_exposure_time_us(old_exp_us)
+            self.camera._set_timestamp_mode(old_timestamp)
+            self.camera._arm(self.camera._num_buffers)
+            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
+            self.filter_wheel._finish_moving()
+            write_voltages_thread.get_result()
+            self._settings_applied = True
+            if settle_vibrations:
+                    time.sleep(2)
+            custody.switch_from(self.camera, to=None)
+            if filename is not None:
+                if not os.path.exists('sols_snoutfocus'):
+                    os.makedirs('sols_snoutfocus')
+                path = 'sols_snoutfocus\\' + filename
+                if self.verbose:
+                    print("%s: saving '%s'"%(self.name, path))
+                imwrite(path, data_buffer[:, np.newaxis, :, :], imagej=True)
+                if self.verbose: print("%s: done saving."%self.name)
+            self._release_data_buffer(data_buffer)
+        snoutfocus_thread = ct.CustodyThread(
+            target=snoutfocus_task, first_resource=self.camera).start()
+        self.unfinished_tasks.put(snoutfocus_thread)
+        return snoutfocus_thread
+
     def apply_settings( # Must call before .acquire()
         self,
         channels_per_slice=None,    # Tuple of strings
@@ -476,113 +583,6 @@ class Microscope:
             target=settings_task, first_resource=self.camera).start()
         self.unfinished_tasks.put(settings_thread)
         return settings_thread
-
-    def snoutfocus(self, filename=None, settle_vibrations=True):
-        def snoutfocus_task(custody):
-            custody.switch_from(None, to=self.camera) # Safe to change settings
-            if not self._settings_applied:
-                print("\n%s: ***WARNING*** -> settings not applied"%self.name)
-                print("%s: -> please apply legal settings"%self.name)
-                print("%s: (all arguments must be specified at least once)")
-                custody.switch_from(self.camera, to=None)
-                return
-            self._settings_applied = False # In case the thread crashes
-            # Record the settings we'll have to reset:
-            old_fw_pos = emission_filter_options[self.emission_filter]
-            old_images = self.camera.num_images
-            old_exp_us = self.camera.exposure_us
-            old_roi_px = self.camera.roi_px
-            old_timestamp = self.camera.timestamp_mode
-            old_voltages = self.voltages
-            # Get microscope settings ready to take our measurement:
-            self.filter_wheel.move(emission_filter_options['Open'], block=False)
-            self.snoutfocus_piezo.set_voltage(0, block=False) # fw slower
-            piezo_limit_v = 150 # 15 um for current piezo
-            piezo_step_v = 2 # 200 nm steps
-            piezo_voltages = np.arange(
-                0, piezo_limit_v + piezo_step_v, piezo_step_v)
-            images = len(piezo_voltages)
-            self.camera.num_images = images # update attribute
-            roi_px = {'left': 901, 'right': 1160, 'top': 901, 'bottom': 1148}
-            self.camera._disarm()
-            self.camera._set_roi(roi_px)
-            self.camera._set_exposure_time_us(100)
-            self.camera._set_timestamp_mode('off')
-            self.camera._arm(self.camera._num_buffers)
-            # Calculate voltages for the analog-out card:
-            exp_px = self.ao.s2p(1e-6*self.camera.exposure_us)
-            roll_px = self.ao.s2p(1e-6*self.camera.rolling_time_us)
-            jitter_px = max(self.ao.s2p(30e-6), 1)
-            piezo_settling_px = self.ao.s2p(0.000) # Not yet measured
-            period_px = (max(exp_px, roll_px, piezo_settling_px) + jitter_px)
-            n2c = self.names_to_voltage_channels # A temporary nickname
-            v_open_shutter = np.zeros((self.ao.s2p(5*1e-3), # Shutter open time
-                                       self.ao.num_channels), 'float64')
-            v_open_shutter[:, n2c['snoutfocus_shutter']] = 5
-            voltages = [v_open_shutter] # insert the shutter open array first
-            for piezo_voltage in piezo_voltages:
-                v = np.zeros((period_px, self.ao.num_channels), 'float64')
-                v[:, n2c['snoutfocus_shutter']] = 5
-                v[:roll_px, n2c['camera']] = 5
-                v[:, n2c['snoutfocus_piezo']] = (
-                    10 * (piezo_voltage / piezo_limit_v)) # 10 V
-                voltages.append(v)
-            voltages = np.concatenate(voltages, axis=0)
-            # Allocate memory and finalize microscope settings:
-            data_buffer = self._get_data_buffer(
-                (images, self.camera.height_px, self.camera.width_px), 'uint16')
-            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
-            self.filter_wheel._finish_moving()
-            # Take pictures while moving the snoutfocus piezo:
-            camera_thread = ct.ResultThread(
-                target=self.camera.record_to_memory,
-                kwargs={'allocated_memory': data_buffer,
-                        'software_trigger': False},).start()
-            self.ao.play_voltages(voltages, block=False) # Ends at 0 V
-            camera_thread.get_result()
-            # Start cleaning up after ourselves:
-            write_voltages_thread = ct.ResultThread(
-                target=self.ao._write_voltages,
-                args=(old_voltages,)).start()
-            self.filter_wheel.move(old_fw_pos, block=False)
-            # Inspect the images to find/set best snoutfocus piezo position:
-            if np.max(data_buffer) < 5 * np.min(data_buffer):
-                print('\n%s: WARNING snoutfocus laser intensity low:'%self.name)
-                print('%s: -> is the laser powered up?'%self.name)
-            v = piezo_step_v * np.unravel_index(
-                np.argmax(data_buffer), data_buffer.shape)[0]
-            if (v == 0 or v == piezo_limit_v):
-                print('\n%s: WARNING snoutfocus piezo out of range!'%self.name)
-            self.snoutfocus_piezo.set_voltage(v, block=False)
-            if self.verbose:
-                print('\n%s: snoutfocus piezo voltage = %0.2f'%(self.name, v))
-            # Finish cleaning up after ourselves:
-            self.camera.num_images = old_images
-            self.camera._disarm()
-            self.camera._set_roi(old_roi_px)
-            self.camera._set_exposure_time_us(old_exp_us)
-            self.camera._set_timestamp_mode(old_timestamp)
-            self.camera._arm(self.camera._num_buffers)
-            self.snoutfocus_piezo._finish_set_voltage(polling_wait_s=0)
-            self.filter_wheel._finish_moving()
-            write_voltages_thread.get_result()
-            self._settings_applied = True
-            if settle_vibrations:
-                    time.sleep(2)
-            custody.switch_from(self.camera, to=None)
-            if filename is not None:
-                if not os.path.exists('sols_snoutfocus'):
-                    os.makedirs('sols_snoutfocus')
-                path = 'sols_snoutfocus\\' + filename
-                if self.verbose:
-                    print("%s: saving '%s'"%(self.name, path))
-                imwrite(path, data_buffer[:, np.newaxis, :, :], imagej=True)
-                if self.verbose: print("%s: done saving."%self.name)
-            self._release_data_buffer(data_buffer)
-        snoutfocus_thread = ct.CustodyThread(
-            target=snoutfocus_task, first_resource=self.camera).start()
-        self.unfinished_tasks.put(snoutfocus_thread)
-        return snoutfocus_thread
 
     def acquire(self,               # 'tzcyx' format
                 filename=None,      # None = no save, same string = overwrite
