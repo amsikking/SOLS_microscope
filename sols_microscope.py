@@ -34,6 +34,17 @@ M1 = 200 / 2; Mscan = 70 / 70; M2 = 5 / 357; M3 = 200 / 5
 MRR = M1 * Mscan * M2; Mtot = MRR * M3;
 camera_px_um = 6.5; sample_px_um = camera_px_um / Mtot
 tilt = np.deg2rad(30)
+dichroic_mirror_options = {'ZT405/488/561/640rpc'   :0}
+emission_filter_options = {'Shutter'                :0,
+                           'Open'                   :1,
+                           'ET450/50M'              :2,
+                           'ET525/50M'              :3,
+                           'ET600/50M'              :4,
+                           'ET690/50M'              :5,
+                           'ZET405/488/561/640m'    :6,
+                           'LP02-488RU'             :7,
+                           'LP02-561RU'             :8,
+                           '(unused)'               :9}
 
 class Microscope:
     def __init__(self,
@@ -41,10 +52,12 @@ class Microscope:
                  ao_rate,               # slow ~1e3, medium ~1e4, fast ~1e5
                  name='SOLS v1.1',
                  verbose=True):
+        self.max_allocated_bytes = max_allocated_bytes
         self.name = name
         self.verbose = verbose
         if self.verbose: print("%s: opening..."%self.name)
         self.unfinished_tasks = queue.Queue()
+        # init hardware/software:
         slow_fw_init = ct.ResultThread(
             target=self._init_filter_wheel).start() #~5.3s
         slow_camera_init = ct.ResultThread(
@@ -55,21 +68,21 @@ class Microscope:
             target=self._init_snoutfocus).start()   #1s
         slow_focus_init = ct.ResultThread(
             target=self._init_focus_piezo).start()  #~0.6s
-        slow_stage_init = ct.ResultThread(
+        slow_XY_stage_init = ct.ResultThread(
             target=self._init_XY_stage).start()     #~0.4s
         self._init_display()                        #~1.3s
         self._init_datapreview()                    #~0.8s
         self._init_ao(ao_rate)                      #~0.2s
-        slow_stage_init.get_result()
+        slow_XY_stage_init.get_result()
         slow_focus_init.get_result()
         slow_snoutfocus_init.get_result()
         slow_lasers_init.get_result()
         slow_camera_init.get_result()
         slow_fw_init.get_result()
-        self.max_allocated_bytes = max_allocated_bytes
+        # configure:
         self.illumination_sources = ( # configure as needed
             'LED', '405', '488', '561', '640', '405_on_during_rolling')
-        self.dichroic_mirror = 'ZT405/488/561/640rpc'
+        self.dichroic_mirror = tuple(dichroic_mirror_options.keys())[0]
         self.max_bytes_per_buffer = (2**31) # legal tiff
         self.max_data_buffers = 4 # camera, preview, display, filesave
         self.max_preview_buffers = self.max_data_buffers
@@ -105,38 +118,6 @@ class Microscope:
         if self.verbose: print("\n%s: -> ao card open."%self.name)
         atexit.register(self.ao.close)
 
-    def _init_filter_wheel(self):
-        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
-        self.filter_wheel = sutter_Lambda_10_3.Controller(
-            which_port='COM3', verbose=False)
-        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
-        self.emission_filter_options = {
-            'Shutter'               :0,
-            'Open'                  :1,
-            'ET450/50M'             :2,
-            'ET525/50M'             :3,
-            'ET600/50M'             :4,
-            'ET690/50M'             :5,
-            'ZET405/488/561/640m'   :6,
-            'LP02-488RU'            :7,
-            'LP02-561RU'            :8,
-            '(unused)'              :9}
-        atexit.register(self.filter_wheel.close)
-
-    def _init_camera(self):
-        if self.verbose: print("\n%s: opening camera..."%self.name)
-        self.camera = ct.ObjectInSubprocess(
-            pco_edge42_cl.Camera, verbose=False, close_method_name='close')
-        if self.verbose: print("\n%s: -> camera open."%self.name)
-
-    def _init_lasers(self):
-        if self.verbose: print("\n%s: opening lasers..."%self.name)
-        self.lasers = coherent_OBIS_LSLX_laser_box.Controller(
-            which_port='COM4', control_mode='analog', verbose=False)
-        for laser in self.lasers.lasers:
-            self.lasers.set_enable('ON', laser)
-        if self.verbose: print("\n%s: -> lasers open."%self.name)
-
     def _init_snoutfocus(self):
         if self.verbose: print("\n%s: opening snoutfocus piezo..."%self.name)
         self.snoutfocus_piezo = thorlabs_MDT694B.Controller(
@@ -148,6 +129,27 @@ class Microscope:
         if self.verbose: print("\n%s: -> snoutfocus shutter open."%self.name)
         atexit.register(self.snoutfocus_piezo.close)
         atexit.register(self.snoutfocus_shutter.close)
+
+    def _init_lasers(self):
+        if self.verbose: print("\n%s: opening lasers..."%self.name)
+        self.lasers = coherent_OBIS_LSLX_laser_box.Controller(
+            which_port='COM4', control_mode='analog', verbose=False)
+        for laser in self.lasers.lasers:
+            self.lasers.set_enable('ON', laser)
+        if self.verbose: print("\n%s: -> lasers open."%self.name)
+
+    def _init_filter_wheel(self):
+        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
+        self.filter_wheel = sutter_Lambda_10_3.Controller(
+            which_port='COM3', verbose=False)
+        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
+        atexit.register(self.filter_wheel.close)
+
+    def _init_camera(self):
+        if self.verbose: print("\n%s: opening camera..."%self.name)
+        self.camera = ct.ObjectInSubprocess(
+            pco_edge42_cl.Camera, verbose=False, close_method_name='close')
+        if self.verbose: print("\n%s: -> camera open."%self.name)
 
     def _init_focus_piezo(self):
         if self.verbose: print("\n%s: opening focus piezo..."%self.name)
@@ -414,7 +416,7 @@ class Microscope:
                     target=self.XY_stage.get_position_mm).start()
             if emission_filter is not None:
                 self.filter_wheel.move(
-                    self.emission_filter_options[emission_filter], block=False)
+                    emission_filter_options[emission_filter], block=False)
             if focus_piezo_z_um is not None:
                 assert focus_piezo_z_um[1] in ('relative', 'absolute')
                 z = focus_piezo_z_um[0]
@@ -485,15 +487,14 @@ class Microscope:
                 return
             self._settings_applied = False # In case the thread crashes
             # Record the settings we'll have to reset:
-            old_fw_pos = self.emission_filter_options[self.emission_filter]
+            old_fw_pos = emission_filter_options[self.emission_filter]
             old_images = self.camera.num_images
             old_exp_us = self.camera.exposure_us
             old_roi_px = self.camera.roi_px
             old_timestamp = self.camera.timestamp_mode
             old_voltages = self.voltages
             # Get microscope settings ready to take our measurement:
-            self.filter_wheel.move(
-                self.emission_filter_options['Open'], block=False)
+            self.filter_wheel.move(emission_filter_options['Open'], block=False)
             self.snoutfocus_piezo.set_voltage(0, block=False) # fw slower
             piezo_limit_v = 150 # 15 um for current piezo
             piezo_step_v = 2 # 200 nm steps
