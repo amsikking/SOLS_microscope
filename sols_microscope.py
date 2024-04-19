@@ -718,22 +718,32 @@ class _CustomNapariDisplay:
     def __init__(self):
         self.viewer = napari.Viewer()
 
+    def _legalize_slider(self, image):
+        for ax in range(len(image.shape) - 2): # slider axes other than X, Y
+            # if the current viewer slider steps > corresponding image shape:
+            if self.viewer.dims.nsteps[ax] > image.shape[ax]:
+                # set the slider position to the max legal value:
+                self.viewer.dims.set_point(ax, image.shape[ax] - 1)
+
     def show_image(self, last_preview):
         if not hasattr(self, 'last_image'):
             self.last_image = self.viewer.add_image(last_preview)
         else:
+            self._legalize_slider(last_preview)
             self.last_image.data = last_preview
-            
+
     def show_grid_preview(self, grid_preview):
         if not hasattr(self, 'grid_image'):
             self.grid_image = self.viewer.add_image(grid_preview)
         else:
+            self._legalize_slider(grid_preview)
             self.grid_image.data = grid_preview
-            
+
     def show_tile_preview(self, tile_preview):
         if not hasattr(self, 'tile_image'):
             self.tile_image = self.viewer.add_image(tile_preview)
         else:
+            self._legalize_slider(tile_preview)
             self.tile_image.data = tile_preview
 
     def close(self):
