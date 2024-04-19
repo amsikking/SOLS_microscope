@@ -725,9 +725,8 @@ class _CustomNapariDisplay:
                 # set the slider position to the max legal value:
                 self.viewer.dims.set_point(ax, image.shape[ax] - 1)
 
-    def _reset_contrast(self, image):
-        self.viewer.layers[0].contrast_limits = ( # 2D image min to max
-            image[-2:].min(), image[-2:].max())
+    def _reset_contrast(self, image): # 4D image min to max
+        self.viewer.layers[0].contrast_limits = (image.min(), image.max())
 
     def show_image(self, last_preview):
         if not hasattr(self, 'last_image'):
