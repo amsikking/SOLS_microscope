@@ -95,8 +95,9 @@ class GuiMicroscope:
             dt = datetime.strftime(datetime.now(),'%Y-%m-%d_%H-%M-%S_')
             self.session_folder = dt + 'sols_gui_session\\'
             os.makedirs(self.session_folder)
-            # snap a volume:
+            # snap a volume and enable scout mode:
             self.last_acquire_task = self.scope.acquire()
+            self.running_scout_mode.set(True)
         # start event loop:
         self.root.mainloop() # blocks here until 'QUIT'
         self.root.destroy()
@@ -492,7 +493,7 @@ class GuiMicroscope:
                 "The 'FOCUS PIEZO' is a (fast) fine focus device for \n" +
                 "precisley adjusting the focus of the primary objective \n" +
                 "over a short range."))
-        min_um, max_um = 0, 100
+        min_um, max_um = 0, 200
         small_move_um, large_move_um = 1, 5
         center_um = int(round((max_um - min_um) / 2))
         # slider:
