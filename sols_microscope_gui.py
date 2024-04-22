@@ -1154,36 +1154,46 @@ class GuiMicroscope:
                 while not os.path.isfile(grid_preview_filename):
                     self.root.after(self.gui_delay_ms)
                 image = imread(grid_preview_filename)
+                if len(image.shape) == 2:
+                    image = image[np.newaxis,:] # add channels, no volumes                
                 shape = image.shape
                 # add reference:
-                image = Image.fromarray(image) # convert to ImageDraw
-                XY = (int(0.1 * min(shape)), shape[0] - int(0.15 * min(shape)))
-                font_size = int(0.1 * min(shape))
+                XY = (int(0.1 * min(shape[-2:])),
+                      shape[1] - int(0.15 * min(shape[-2:])))
+                font_size = int(0.1 * min(shape[-2:]))
                 font = ImageFont.truetype('arial.ttf', font_size)
-                ImageDraw.Draw(image).text(XY, name, fill=0, font=font)
+                for ch in range(shape[0]):
+                    # convert 2D image to PIL format for ImageDraw:                    
+                    im = Image.fromarray(image[ch,:]) # convert to ImageDraw
+                    ImageDraw.Draw(im).text(XY, name, fill=0, font=font)
+                    image[ch,:] = im
                 # make grid image:
                 if not self.tile_the_grid.get():
                     if self.current_grid_preview == 0:
                         self.grid_preview = np.zeros(
-                            (self.grid_rows.value.get() * shape[0],
-                             self.grid_cols.value.get() * shape[1]), 'uint16')
-                    self.grid_preview[
-                        gr * shape[0]:(gr + 1) * shape[0],
-                        gc * shape[1]:(gc + 1) * shape[1]
-                        ] = image
+                            (shape[0],
+                             self.grid_rows.value.get() * shape[1],
+                             self.grid_cols.value.get() * shape[2]),
+                            'uint16')
+                    self.grid_preview[:,
+                                      gr * shape[1]:(gr + 1) * shape[1],
+                                      gc * shape[2]:(gc + 1) * shape[2]
+                                      ] = image
                 else:
                     if self.current_grid_preview == 0:
                         self.grid_preview = np.zeros(
-                            (self.grid_rows.value.get() *
-                             shape[0] * self.tile_rc.value.get(),
+                            (shape[0],
+                             self.grid_rows.value.get() *
+                             shape[1] * self.tile_rc.value.get(),
                              self.grid_cols.value.get() *
-                             shape[1] * self.tile_rc.value.get()),
+                             shape[2] * self.tile_rc.value.get()),
                             'uint16')
                     self.grid_preview[
-                        (gr * self.tile_rc.value.get() + tr) * shape[0]:
-                        (gr * self.tile_rc.value.get() + tr + 1) * shape[0],
-                        (gc * self.tile_rc.value.get() + tc) * shape[1]:
-                        (gc * self.tile_rc.value.get() + tc + 1) * shape[1]
+                        :,
+                        (gr * self.tile_rc.value.get() + tr) * shape[1]:
+                        (gr * self.tile_rc.value.get() + tr + 1) * shape[1],
+                        (gc * self.tile_rc.value.get() + tc) * shape[2]:
+                        (gc * self.tile_rc.value.get() + tc + 1) * shape[2]
                         ] = image
                 # display:
                 self.scope.display.show_grid_preview(self.grid_preview)
