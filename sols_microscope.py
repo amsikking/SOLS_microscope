@@ -51,10 +51,12 @@ class Microscope:
                  max_allocated_bytes,   # Limit of available RAM for machine
                  ao_rate,               # slow ~1e3, medium ~1e4, fast ~1e5
                  name='SOLS v1.1',
-                 verbose=True):
+                 verbose=True,
+                 print_warnings=True):
         self.max_allocated_bytes = max_allocated_bytes
         self.name = name
         self.verbose = verbose
+        self.print_warnings = print_warnings
         if self.verbose: print("%s: opening..."%self.name)
         self.unfinished_tasks = queue.Queue()
         # init hardware/software:
@@ -177,19 +179,20 @@ class Microscope:
         atexit.register(self.ao.close)
 
     def _check_memory(self):        
-        memory_exceeded = False
         # Data:
         self.images = (self.volumes_per_buffer *
                        len(self.channels_per_slice) *
                        self.slices_per_volume)
         self.bytes_per_data_buffer = (
             2 * self.images * self.height_px * self.width_px)
+        self.data_buffer_exceeded = False
         if self.bytes_per_data_buffer > self.max_bytes_per_buffer:
-            print("\n%s: ***WARNING*** -> settings rejected"%self.name +
-                  " (bytes_per_data_buffer > max)")
-            print("%s: -> reduce settings"%self.name +
-                  " or increase 'max_bytes_per_buffer'")
-            memory_exceeded = True
+            self.data_buffer_exceeded = True
+            if self.print_warnings:
+                print("\n%s: ***WARNING***: settings rejected"%self.name)
+                print("%s: -> data_buffer_exceeded"%self.name)
+                print("%s: -> reduce settings"%self.name +
+                      " or increase 'max_bytes_per_buffer'")
         # Preview:
         preview_shape = DataPreview.shape(self.volumes_per_buffer,
                                           self.slices_per_volume,
@@ -201,23 +204,27 @@ class Microscope:
                                           self.preview_crop_px,
                                           self.timestamp_mode)
         self.bytes_per_preview_buffer = 2 * int(np.prod(preview_shape))
+        self.preview_buffer_exceeded = False
         if self.bytes_per_preview_buffer > self.max_bytes_per_buffer:
-            print("\n%s: ***WARNING*** -> settings rejected"%self.name +
-                  " (bytes_per_preview_buffer > max)")
-            print("%s: -> reduce settings"%self.name +
-                  " or increase 'max_bytes_per_buffer'")
-            memory_exceeded = True
+            self.preview_buffer_exceeded = True
+            if self.print_warnings:
+                print("\n%s: ***WARNING***: settings rejected"%self.name)
+                print("%s: -> preview_buffer_exceeded"%self.name)
+                print("%s: -> reduce settings"%self.name +
+                      " or increase 'max_bytes_per_buffer'")
         # Total:
         self.total_bytes = (
             self.bytes_per_data_buffer * self.max_data_buffers +
             self.bytes_per_preview_buffer * self.max_preview_buffers)
+        self.total_bytes_exceeded = False
         if self.total_bytes > self.max_allocated_bytes:
-            print("\n%s: ***WARNING*** -> settings rejected"%self.name +
-                  " (total_bytes > max)")
-            print("%s: -> reduce settings"%self.name +
-                  " or increase 'max_allocated_bytes'")
-            memory_exceeded = True
-        return memory_exceeded
+            self.total_bytes_exceeded = True
+            if self.print_warnings:
+                print("\n%s: ***WARNING***: settings rejected"%self.name)
+                print("%s: -> total_bytes_exceeded"%self.name)
+                print("%s: -> reduce settings"%self.name +
+                      " or increase 'max_allocated_bytes'")
+        return None
 
     def _calculate_voltages(self):
         n2c = self.names_to_voltage_channels # nickname
@@ -373,9 +380,10 @@ class Microscope:
         def snoutfocus_task(custody):
             custody.switch_from(None, to=self.camera) # Safe to change settings
             if not self._settings_applied:
-                print("\n%s: ***WARNING*** -> settings not applied"%self.name)
-                print("%s: -> please apply legal settings"%self.name)
-                print("%s: (all arguments must be specified at least once)")
+                if self.print_warnings:
+                    print("\n%s: ***WARNING***: settings not applied"%self.name)
+                    print("%s: -> please apply legal settings"%self.name)
+                    print("%s: (all arguments must be specified at least once)")
                 custody.switch_from(self.camera, to=None)
                 return
             self._settings_applied = False # In case the thread crashes
@@ -525,10 +533,12 @@ class Microscope:
                 self.scan_range_um = calculate_scan_range_um(
                     self.scan_step_size_px, self.slices_per_volume)
                 assert 0 <= self.scan_range_um <= 200 # optical limit
-            memory_exceeded = self._check_memory()
-            if memory_exceeded:
+            self._check_memory()
+            if (self.data_buffer_exceeded or
+                self.preview_buffer_exceeded or
+                self.total_bytes_exceeded):
                 custody.switch_from(self.camera, to=None)
-                return
+                return None
             # Send hardware commands, slowest to fastest:            
             if XY_stage_position_mm is not None:
                 assert XY_stage_position_mm[2] in ('relative', 'absolute')
@@ -611,9 +621,10 @@ class Microscope:
         def acquire_task(custody):
             custody.switch_from(None, to=self.camera) # get camera
             if not self._settings_applied:
-                print("\n%s: ***WARNING*** -> settings not applied"%self.name)
-                print("%s: -> please apply legal settings"%self.name)
-                print("%s: (all arguments must be specified at least once)")
+                if self.print_warnings:
+                    print("\n%s: ***WARNING***: settings not applied"%self.name)
+                    print("%s: -> please apply legal settings"%self.name)
+                    print("%s: (all arguments must be specified at least once)")
                 custody.switch_from(self.camera, to=None)
                 return
             # must update XY stage position attributes in case joystick was used
