@@ -726,28 +726,27 @@ class _CustomNapariDisplay:
                 self.viewer.dims.set_point(ax, image.shape[ax] - 1)
 
     def _reset_contrast(self, image): # 4D image min to max
-        self.viewer.layers[0].contrast_limits = (image.min(), image.max())
+        for layer in self.viewer.layers: # image, grid, tile
+            layer.contrast_limits = (image.min(), image.max())
 
     def show_image(self, last_preview):
+        self._legalize_slider(last_preview)
+        self._reset_contrast(last_preview)
         if not hasattr(self, 'last_image'):
             self.last_image = self.viewer.add_image(last_preview)
         else:
-            self._legalize_slider(last_preview)
-            self._reset_contrast(last_preview)
             self.last_image.data = last_preview
 
     def show_grid_preview(self, grid_preview):
         if not hasattr(self, 'grid_image'):
             self.grid_image = self.viewer.add_image(grid_preview)
         else:
-            self._legalize_slider(grid_preview)
             self.grid_image.data = grid_preview
 
     def show_tile_preview(self, tile_preview):
         if not hasattr(self, 'tile_image'):
             self.tile_image = self.viewer.add_image(tile_preview)
         else:
-            self._legalize_slider(tile_preview)
             self.tile_image.data = tile_preview
 
     def close(self):
