@@ -49,7 +49,10 @@ class GuiMicroscope:
         if init_microscope:
             self.max_allocated_bytes = 100e9
             self.scope = sols.Microscope(
-                max_allocated_bytes=self.max_allocated_bytes, ao_rate=1e4)
+                max_allocated_bytes=self.max_allocated_bytes,
+                ao_rate=1e4,
+                print_warnings=False)
+            self.max_bytes_per_buffer = self.scope.max_bytes_per_buffer
             # configure any hardware preferences:
             self.scope.XY_stage.set_velocity(5, 5)
             # make mandatory call to 'apply_settings':
@@ -74,11 +77,18 @@ class GuiMicroscope:
             # check microscope periodically:
             def _run_check_microscope():
                 self.scope.apply_settings().get_result() # update attributes
-                self.volumes_per_s.set(self.scope.volumes_per_s)
-                self.total_bytes.set(self.scope.total_bytes)
+                # check memory:
                 self.data_bytes.set(self.scope.bytes_per_data_buffer)
+                self.data_buffer_exceeded.set(self.scope.data_buffer_exceeded)
                 self.preview_bytes.set(self.scope.bytes_per_preview_buffer)
+                self.preview_buffer_exceeded.set(
+                    self.scope.preview_buffer_exceeded)
+                self.total_bytes.set(self.scope.total_bytes)
+                self.total_bytes_exceeded.set(self.scope.total_bytes_exceeded)
+                # calculate voltages:
                 self.buffer_time_s.set(self.scope.buffer_time_s)
+                self.volumes_per_s.set(self.scope.volumes_per_s)
+                # check joystick:
                 self._check_joystick()
                 self.root.after(self.gui_delay_ms, _run_check_microscope)
                 return None
@@ -1647,7 +1657,7 @@ class GuiMicroscope:
 
     def init_settings_output(self):
         frame = tk.LabelFrame(self.root, text='SETTINGS OUTPUT', bd=6)
-        frame.grid(row=6, column=5, rowspan=2, padx=10, pady=10, sticky='n')
+        frame.grid(row=6, column=5, rowspan=3, padx=10, pady=10, sticky='n')
         button_width, button_height = 25, 2
         spinbox_width = 20
         # volumes per second textbox:
@@ -1676,22 +1686,93 @@ class GuiMicroscope:
                 "NOTE: this is the volumetric rate for the acquisition \n" +
                 "(i.e. during the analogue out 'play') and does reflect \n" +
                 "any delays or latency between acquisitions."))
-        # total memory textbox:
-        self.total_bytes = tk.IntVar()
-        total_memory_textbox = tkcw.Textbox(
+        # data memory textbox:
+        self.data_bytes = tk.IntVar()
+        self.data_buffer_exceeded = tk.BooleanVar()
+        data_memory_textbox = tkcw.Textbox(
             frame,
-            label='Total memory (GB)',
+            label='Data memory (GB)',
             default_text='None',
             row=1,
             width=spinbox_width,
             height=1)
+        data_memory_textbox.textbox.tag_add('color', '1.0', '10.0')
+        def _update_data_memory():
+            data_memory_gb = 1e-9 * self.data_bytes.get()
+            max_memory_gb = 1e-9 * self.max_bytes_per_buffer
+            memory_pct = 100 * data_memory_gb / max_memory_gb
+            text = '%0.3f (%0.2f%% max)'%(data_memory_gb, memory_pct)
+            data_memory_textbox.textbox.delete('1.0', '10.0')
+            bg = 'white'
+            if self.data_buffer_exceeded.get(): bg = 'red'
+            data_memory_textbox.textbox.tag_config('color', background=bg)
+            data_memory_textbox.textbox.insert('1.0', text, 'color')
+            return None
+        self.data_bytes.trace_add(
+            'write',
+            lambda var, index, mode: _update_data_memory())
+        data_memory_textbox_tip = tix.Balloon(data_memory_textbox)
+        data_memory_textbox_tip.bind_widget(
+            data_memory_textbox,
+            balloonmsg=(
+                "Shows the 'data buffer memory' (GB) that the microscope\n" +
+                "will need to run the settings that were last applied.\n" +
+                "NOTE: this can be useful for montoring resources and \n" +
+                "avoiding memory limits."))
+        # preview memory textbox:
+        self.preview_bytes = tk.IntVar()
+        self.preview_buffer_exceeded = tk.BooleanVar()
+        preview_memory_textbox = tkcw.Textbox(
+            frame,
+            label='Preview memory (GB)',
+            default_text='None',
+            row=2,
+            width=spinbox_width,
+            height=1)
+        preview_memory_textbox.textbox.tag_add('color', '1.0', '10.0')
+        def _update_preview_memory():
+            preview_memory_gb = 1e-9 * self.preview_bytes.get()
+            max_memory_gb = 1e-9 * self.max_bytes_per_buffer
+            memory_pct = 100 * preview_memory_gb / max_memory_gb
+            text = '%0.3f (%0.2f%% max)'%(preview_memory_gb, memory_pct)
+            preview_memory_textbox.textbox.delete('1.0', '10.0')
+            bg = 'white'
+            if self.preview_buffer_exceeded.get(): bg = 'red'
+            preview_memory_textbox.textbox.tag_config('color', background=bg)
+            preview_memory_textbox.textbox.insert('1.0', text, 'color')
+            return None
+        self.preview_bytes.trace_add(
+            'write',
+            lambda var, index, mode: _update_preview_memory())
+        preview_memory_textbox_tip = tix.Balloon(preview_memory_textbox)
+        preview_memory_textbox_tip.bind_widget(
+            preview_memory_textbox,
+            balloonmsg=(
+                "Shows the 'preview buffer memory' (GB) that the microscope\n" +
+                "will need to run the settings that were last applied.\n" +
+                "NOTE: this can be useful for montoring resources and \n" +
+                "avoiding memory limits."))
+        # total memory textbox:
+        self.total_bytes = tk.IntVar()
+        self.total_bytes_exceeded = tk.BooleanVar()
+        total_memory_textbox = tkcw.Textbox(
+            frame,
+            label='Total memory (GB)',
+            default_text='None',
+            row=3,
+            width=spinbox_width,
+            height=1)
+        total_memory_textbox.textbox.tag_add('color', '1.0', '10.0')
         def _update_total_memory():
             total_memory_gb = 1e-9 * self.total_bytes.get()
             max_memory_gb = 1e-9 * self.max_allocated_bytes
             memory_pct = 100 * total_memory_gb / max_memory_gb
-            text = '%0.3f (%0.2f%% of max)'%(total_memory_gb, memory_pct)
+            text = '%0.3f (%0.2f%% max)'%(total_memory_gb, memory_pct)
             total_memory_textbox.textbox.delete('1.0', '10.0')
-            total_memory_textbox.textbox.insert('1.0', text)
+            bg = 'white'
+            if self.total_bytes_exceeded.get(): bg = 'red'
+            total_memory_textbox.textbox.tag_config('color', background=bg)
+            total_memory_textbox.textbox.insert('1.0', text, 'color')
             return None
         self.total_bytes.trace_add(
             'write',
@@ -1700,18 +1781,16 @@ class GuiMicroscope:
         total_memory_textbox_tip.bind_widget(
             total_memory_textbox,
             balloonmsg=(
-                "Shows the 'Total memory (GB)' that the microscope will \n" +
-                "need to run the settings that were last applied.\n" +
+                "Shows the 'total memory' (GB) that the microscope\n" +
+                "will need to run the settings that were last applied.\n" +
                 "NOTE: this can be useful for montoring resources and \n" +
                 "avoiding memory limits."))
         # total storage textbox:
-        self.data_bytes = tk.IntVar()
-        self.preview_bytes = tk.IntVar()
         total_storage_textbox = tkcw.Textbox(
             frame,
             label='Total storage (GB)',
             default_text='None',
-            row=2,
+            row=4,
             width=spinbox_width,
             height=1)
         def _update_total_storage():
@@ -1726,14 +1805,14 @@ class GuiMicroscope:
             total_storage_textbox.textbox.delete('1.0', '10.0')
             total_storage_textbox.textbox.insert('1.0', text)
             return None
-        self.data_bytes.trace_add(
+        self.total_bytes.trace_add(
             'write',
             lambda var, index, mode: _update_total_storage())
         total_storage_textbox_tip = tix.Balloon(total_storage_textbox)
         total_storage_textbox_tip.bind_widget(
             total_storage_textbox,
             balloonmsg=(
-                "Shows the 'Total storage (GB)' that the microscope will \n" +
+                "Shows the 'total storage' (GB) that the microscope will \n" +
                 "need to save the data if 'Run acquire' is pressed (based \n" +
                 "on the settings that were last applied).\n" +
                 "NOTE: this can be useful for montoring resources and \n" +
@@ -1744,7 +1823,7 @@ class GuiMicroscope:
             frame,
             label='Minimum acquire time (s)',
             default_text='None',
-            row=3,
+            row=5,
             width=spinbox_width,
             height=1)
         def _update_min_time():
