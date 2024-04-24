@@ -1160,7 +1160,7 @@ class GuiMicroscope:
                     folder_name=folder_name,
                     description=self.description_textbox.text,
                     preview_only=preview_only).get_result()
-                grid_preview_filename = (folder_name + '\preview\\' + filename)
+                grid_preview_filename = (folder_name + '\\preview\\' + filename)
                 while not os.path.isfile(grid_preview_filename):
                     self.root.after(self.gui_delay_ms)
                 image = imread(grid_preview_filename)
@@ -1315,7 +1315,7 @@ class GuiMicroscope:
                     folder_name=folder_name,
                     description=self.description_textbox.text,
                     preview_only=preview_only).get_result()
-                tile_filename = (folder_name + '\preview\\' + filename)
+                tile_filename = (folder_name + '\\preview\\' + filename)
                 while not os.path.isfile(tile_filename):
                     self.root.after(self.gui_delay_ms)
                 tile = imread(tile_filename)
