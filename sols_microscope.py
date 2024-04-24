@@ -20,7 +20,6 @@ try:
     import pco_edge42_cl            # github.com/amsikking/pco_edge42_cl
     import pi_C_867_2U2             # github.com/amsikking/pi_C_867_2U2
     import pi_E_709_1C1L            # github.com/amsikking/pi_E_709_1C1L
-    import shm_win_patch            # github.com/amsikking/shm_win_patch
     import sutter_Lambda_10_3       # github.com/amsikking/sutter_Lambda_10_3
     import thorlabs_KSC101          # github.com/amsikking/thorlabs_KSC101
     import thorlabs_MDT694B         # github.com/amsikking/thorlabs_MDT694B
@@ -279,9 +278,9 @@ class Microscope:
         self, filename, folder_name, description, display, preview_only):
         def make_folders(folder_name):
             os.makedirs(folder_name)
-            os.makedirs(folder_name + '\data')
-            os.makedirs(folder_name + '\metadata')
-            os.makedirs(folder_name + '\preview')                    
+            os.makedirs(folder_name + '\\data')
+            os.makedirs(folder_name + '\\metadata')
+            os.makedirs(folder_name + '\\preview')                    
         assert type(filename) is str
         if folder_name is None:
             folder_index = 0
@@ -293,9 +292,9 @@ class Microscope:
             make_folders(folder_name)
         else:
             if not os.path.exists(folder_name): make_folders(folder_name)
-        data_path =     folder_name + '\data\\'     + filename
-        metadata_path = folder_name + '\metadata\\' + filename
-        preview_path =  folder_name + '\preview\\'  + filename
+        data_path =     folder_name + '\\data\\'     + filename
+        metadata_path = folder_name + '\\metadata\\' + filename
+        preview_path =  folder_name + '\\preview\\'  + filename
         # save metadata:
         to_save = {
             # date and time:
@@ -726,7 +725,8 @@ class Microscope:
         if self.verbose: print("%s: done closing."%self.name)
 
 class _CustomNapariDisplay:
-    def __init__(self):
+    def __init__(self, auto_contrast=False):
+        self.auto_contrast = auto_contrast
         self.viewer = napari.Viewer()
 
     def _legalize_slider(self, image):
@@ -742,7 +742,8 @@ class _CustomNapariDisplay:
 
     def show_image(self, last_preview):
         self._legalize_slider(last_preview)
-        self._reset_contrast(last_preview)
+        if self.auto_contrast:
+            self._reset_contrast(last_preview)
         if not hasattr(self, 'last_image'):
             self.last_image = self.viewer.add_image(last_preview)
         else:
