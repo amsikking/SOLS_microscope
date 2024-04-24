@@ -660,7 +660,7 @@ class GuiMicroscope:
             tickinterval=6,
             min_value=1,
             max_value=100,
-            default_value=100,
+            default_value=50,
             row=4,
             columnspan=3,
             width=5)
@@ -2029,16 +2029,19 @@ class GuiMicroscope:
                     p = total_positions
             if how == 'end':
                 p = total_positions
+            # record status of scout mode and switch off:
+            self.scout_mode_status.set(self.running_scout_mode.get())
+            self.running_scout_mode.set(0) # avoids snap from focus piezo
             # move:
             self.focus_piezo_z_um.update_and_validate(
                 self.focus_piezo_position_list[p - 1])
             self._update_XY_stage_position(
                 self.XY_stage_position_list[p - 1])
-            # update gui:
+            # update gui and snap:
             self.current_position.update_and_validate(p)
-            # turn off scout mode and snap:
-            self.running_scout_mode.set(0)
             self._snap_and_display()
+            # re-apply scout mode:
+            self.running_scout_mode.set(self.scout_mode_status.get())                
             return None
         # move to start:
         move_to_start_button = tk.Button(
