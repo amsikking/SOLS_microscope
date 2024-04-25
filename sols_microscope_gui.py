@@ -2268,7 +2268,7 @@ class GuiMicroscope:
                                  'live_mode':    self.running_live_mode,
                                  'scout_mode':   self.running_scout_mode,
                                  'acquire':      self.running_acquire}
-        self.scout_mode_status = tk.IntVar()
+        self.scout_mode_status = tk.BooleanVar()
         # cancel running mode popup:
         self.cancel_running_mode_popup = tk.Toplevel()
         self.cancel_running_mode_popup.title('Cancel current process')
