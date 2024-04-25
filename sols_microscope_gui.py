@@ -1,11 +1,11 @@
 # Imports from the python standard library:
 import os
 import time
-from datetime import datetime
 import tkinter as tk
-from tkinter import font
+from datetime import datetime
+from idlelib.tooltip import Hovertip
 from tkinter import filedialog
-from tkinter import tix
+from tkinter import font
 
 # Third party imports, installable via pip:
 import numpy as np
@@ -19,7 +19,7 @@ import tkinter_compound_widgets as tkcw # github.com/amsikking/tkinter
 class GuiMicroscope:
     def __init__(self, init_microscope=True): # set False for GUI design...
         self.init_microscope = init_microscope 
-        self.root = tix.Tk()
+        self.root = tk.Tk()
         self.root.title('SOLS Microscope GUI')
         # adjust font size and delay:
         size = 10 # default = 9
@@ -115,13 +115,11 @@ class GuiMicroscope:
     def init_transmitted_light(self):
         frame = tk.LabelFrame(self.root, text='TRANSMITTED LIGHT', bd=6)
         frame.grid(row=1, column=0, padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'TRANSMITTED LIGHT' illuminates the sample from above.\n" +
-                "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 \n " +
-                "'LASER' must be selected."))
+            "The 'TRANSMITTED LIGHT' illuminates the sample from above.\n" +
+            "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 'LASER'\n" +
+            "must be selected.")
         self.power_tl = tkcw.CheckboxSliderSpinbox(
             frame,
             label='470-850nm (%)',
@@ -138,13 +136,11 @@ class GuiMicroscope:
     def init_laser_box(self):
         frame = tk.LabelFrame(self.root, text='LASER BOX', bd=6)
         frame.grid(row=2, column=0, rowspan=4, padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'LASER' illuminates the sample with a 'light-sheet'.\n" +
-                "NOTE: either the 'TRANSMITTED LIGHT' or at least 1 \n " +
-                "'LASER' must be selected."))
+            "The 'LASER' illuminates the sample with a 'light-sheet'.\n" +
+            "NOTE: either the 'TRANSMITTED LIGHT' or at least 1\n" +
+            "'LASER' must be selected.")
         # 405:
         self.power_405 = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -224,13 +220,11 @@ class GuiMicroscope:
     def init_dichroic_mirror(self):
         frame = tk.LabelFrame(self.root, text='DICHROIC MIRROR', bd=6)
         frame.grid(row=6, column=0, padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'DICHROIC MIRROR' couples the LASER light into the \n" +
-                "microscope (and blocks some of the emission light).\n" +
-                "Search the part number to see the specification."))
+            "The 'DICHROIC MIRROR' couples the LASER light into the\n" +
+            "microscope (and blocks some of the emission light). Search\n" +
+            "the part number to see the specification.")
         inner_frame = tk.LabelFrame(frame, text='fixed')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
         dichroic_mirror_options = tuple(sols.dichroic_mirror_options.keys())
@@ -247,13 +241,11 @@ class GuiMicroscope:
     def init_filter_wheel(self):
         frame = tk.LabelFrame(self.root, text='FILTER WHEEL', bd=6)
         frame.grid(row=7, column=0, padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'FILTER WHEEL' has a choice of 'emission filters' \n" +
-                "(typically used to stop LASER light reaching the camera).\n" +
-                "Search the part numbers to see the specifications."))
+            "The 'FILTER WHEEL' has a choice of 'emission filters'\n" +
+            "(typically used to stop LASER light reaching the camera).\n" +
+            "Search the part numbers to see the specifications.")
         inner_frame = tk.LabelFrame(frame, text='choice')
         inner_frame.grid(row=0, column=0, padx=10, pady=10)
         emission_filter_options = tuple(sols.emission_filter_options.keys())
@@ -291,14 +283,12 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 illumination_time_us=self.illumination_time_us.value.get()))
-        illumination_time_us_tip = tix.Balloon(self.illumination_time_us)
-        illumination_time_us_tip.bind_widget(
+        illumination_time_us_tip = Hovertip(
             self.illumination_time_us,
-            balloonmsg=(
-                "The 'illumination time (us)' determines how long the \n" +
-                "sample will be exposed to light (i.e. the camera will \n" +
-                "collect the emmitted light during this time).\n" +
-                "NOTE: the range in the GUI is 100us to 1000000us (1s)."))
+            "The 'illumination time (us)' determines how long the sample\n" +
+            "will be exposed to light (i.e. the camera will collect the\n" +
+            "emmitted light during this time).\n" +
+            "NOTE: the range in the GUI is 100us to 1000000us (1s).")
         # height_px:
         self.height_px = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -317,14 +307,12 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 height_px=self.height_px.value.get()))
-        height_px_tip = tix.Balloon(self.height_px)
-        height_px_tip.bind_widget(
+        height_px_tip = Hovertip(
             self.height_px,
-            balloonmsg=(
-                "The 'height pixels' determines how many vertical pixels \n" +
-                "are used by the camera. Less pixels is a smaller field \n" +
-                "of view (FOV) and less data.\n" +
-                "NOTE: less vertical pixels speeds up the acquisition!"))
+            "The 'height pixels' determines how many vertical pixels are\n" +
+            "used by the camera. Less pixels is a smaller field of view\n" +
+            "(FOV) and less data.\n" +
+            "NOTE: less vertical pixels speeds up the acquisition!")
         # width_px:
         self.width_px = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -343,13 +331,11 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 width_px=self.width_px.value.get()))
-        width_px_tip = tix.Balloon(self.width_px)
-        width_px_tip.bind_widget(
+        width_px_tip = Hovertip(
             self.width_px,
-            balloonmsg=(
-                "The 'width pixels' determines how many horizontal pixels \n" +
-                "are used by the camera. Less pixels is a smaller field \n" +
-                "of view (FOV) and less data.\n"))
+            "The 'width pixels' determines how many horizontal pixels are\n" +
+            "used by the camera. Less pixels is a smaller field of view\n" +
+            "(FOV) and less data.\n")
         # ROI display:
         tkcw.CanvasRectangleSliderTrace2D(
             frame,
@@ -383,15 +369,12 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 scan_range_um=self.scan_range_um.value.get()))        
-        scan_range_um_tip = tix.Balloon(self.scan_range_um)
-        scan_range_um_tip.bind_widget(
+        scan_range_um_tip = Hovertip(
             self.scan_range_um,
-            balloonmsg=(
-                "The '~scan range (um)' setting requests that the \n" +
-                "microscope use the chosen scan range when acquiring a \n" +
-                "volume.\n" +
-                "NOTE: the actual scan range is optimized by the \n" +
-                "microscope and may differ from the requested value."))
+            "The '~scan range (um)' setting requests that the microscope\n" +
+            "use the chosen scan range when acquiring a volume.\n" +
+            "NOTE: the actual scan range is optimized by the microscope\n" +
+            "and may differ from the requested value.")
         # scan min button:
         button_scan_range_um_min = tk.Button(
             frame,
@@ -441,19 +424,17 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 voxel_aspect_ratio=self.voxel_aspect_ratio.value.get()))        
-        voxel_aspect_ratio_tip = tix.Balloon(self.voxel_aspect_ratio)
-        voxel_aspect_ratio_tip.bind_widget(
+        voxel_aspect_ratio_tip = Hovertip(
             self.voxel_aspect_ratio,
-            balloonmsg=(
-                "The short answer: this determines how finely \n" +
-                "(or coarsely) the acquired volume is sampled.\n" +
-                "The real answer: the '~voxel aspect ratio' setting \n" +
-                "requests that the microscope acquires a volume with \n" +
-                "'cuboid' pixels (i.e. voxels) that have the chosen \n" +
-                "aspect ratio. For example, a ratio of 2 gives voxels \n" +
-                "that are twice as long as they are wide.\n" +
-                "NOTE: the actual voxel aspect ratio is optimized by the \n" +
-                "microscope and may differ from the requested value."))
+            "The short answer: this determines how finely (or coarsely)\n" +
+            "the acquired volume is sampled.\n" +
+            "The real answer: the '~voxel aspect ratio' setting requests\n" +
+            "that the microscope acquires a volume with 'cuboid' pixels\n" +
+            "(i.e. voxels) that have the chosen aspect ratio. For example,\n" +
+            "a ratio of 2 gives voxels that are twice as long as they are\n" +
+            "wide.\n" +
+            "NOTE: the actual voxel aspect ratio is optimized by the \n" +
+            "microscope and may differ from the requested value.")
         # voxel min button:
         button_voxel_aspect_ratio_min = tk.Button(
             frame,
@@ -496,13 +477,11 @@ class GuiMicroscope:
     def init_focus_piezo(self):
         frame = tk.LabelFrame(self.root, text='FOCUS PIEZO', bd=6)
         frame.grid(row=1, column=2, rowspan=2, padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'FOCUS PIEZO' is a (fast) fine focus device for \n" +
-                "precisley adjusting the focus of the primary objective \n" +
-                "over a short range."))
+            "The 'FOCUS PIEZO' is a (fast) fine focus device for precisley\n" +
+            "adjusting the focus of the primary objective over a short\n" +
+            "range.")
         min_um, max_um = 0, 200
         small_move_um, large_move_um = 1, 5
         center_um = int(round((max_um - min_um) / 2))
@@ -588,19 +567,17 @@ class GuiMicroscope:
         frame = tk.LabelFrame(self.root, text='XY STAGE', bd=6)
         frame.grid(row=6, column=2, rowspan=2, columnspan=2,
                    padx=10, pady=10, sticky='n')
-        frame_tip = tix.Balloon(frame)
-        frame_tip.bind_widget(
+        frame_tip = Hovertip(
             frame,
-            balloonmsg=(
-                "The 'XY STAGE' moves the sample in XY with a high \n" +
-                "degree of accuracy (assuming the sample does not move).\n"
-                "To help with XY navigation this panels shows:\n"
-                "- The direction of the 'last move'.\n" +
-                "- The absolute '[X, Y] position (mm)'.\n" +
-                "- Move buttons for 'left', 'right', 'up' and 'down'.\n" +
-                "- A slider bar for the 'step size (% of FOV)', which \n" +
-                "determines how much the move buttons will move as a % \n" +
-                "of the current field of view (FOV)."))
+            "The 'XY STAGE' moves the sample in XY with a high degree of\n" +
+            "accuracy (assuming the sample does not move).\n"
+            "To help with XY navigation this panels shows:\n"
+            "- The direction of the 'last move'.\n" +
+            "- The absolute '[X, Y] position (mm)'.\n" +
+            "- Move buttons for 'left', 'right', 'up' and 'down'.\n" +
+            "- A slider bar for the 'step size (% of FOV)', which \n" +
+            "determines how much the move buttons will move as a % of the\n" +
+            "current field of view (FOV).")
         # position:
         self.XY_stage_position_mm = tk.StringVar()
         self.XY_stage_position_mm.trace_add(
@@ -779,15 +756,13 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         load_grid_from_file_button.grid(row=0, column=0, padx=10, pady=10)
-        load_grid_from_file_tip = tix.Balloon(load_grid_from_file_button)
-        load_grid_from_file_tip.bind_widget(
+        load_grid_from_file_tip = Hovertip(
             load_grid_from_file_button,
-            balloonmsg=(
-                "Use the 'Load from file' button to select a \n" + 
-                "'grid_navigator_parameters.txt' file from a previous \n" +
-                "'sols_gui_session' folder and load these settings into \n" +
-                "the GUI.\n"
-                "NOTE: this will overwrite any existing grid parameters"))
+            "Use the 'Load from file' button to select a text file\n" +
+            "'grid_navigator_parameters.txt' from a previous \n" +
+            "'sols_gui_session' folder and load these settings into\n" +
+            "the GUI.\n"
+            "NOTE: this will overwrite any existing grid parameters")
         # create grid popup:
         create_grid_popup = tk.Toplevel()
         create_grid_popup.title('Create grid')
@@ -896,15 +871,13 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         create_grid_popup_button.grid(row=1, column=0, padx=10, pady=10)
-        create_grid_tip = tix.Balloon(create_grid_popup_button)
-        create_grid_tip.bind_widget(
+        create_grid_tip = Hovertip(
             create_grid_popup_button,
-            balloonmsg=(
-                "Use the 'Create grid' button to create a new grid \n" +
-                "of points you want to navigate (by specifying the rows, \n" +
-                "columns and spacing). For example, this tool can be used \n" +
-                "to move around multiwell plates (or any grid like sample).\n" +
-                "NOTE: this will overwrite any existing grid parameters"))
+            "Use the 'Create grid' button to create a new grid of points\n" +
+            "you want to navigate (by specifying the rows, columns and\n" +
+            "spacing). For example, this tool can be used to move around\n" +
+            "multiwell plates (or any grid like sample).\n" +
+            "NOTE: this will overwrite any existing grid parameters")
         # set location popup:
         set_grid_location_popup = tk.Toplevel()
         set_grid_location_popup.title('Set current location')
@@ -966,15 +939,13 @@ class GuiMicroscope:
             height=button_height)
         self.set_grid_location_button.grid(row=2, column=0, padx=10, pady=10)
         self.set_grid_location_button.config(state='disabled')
-        set_grid_location_tip = tix.Balloon(self.set_grid_location_button)
-        set_grid_location_tip.bind_widget(
+        set_grid_location_tip = Hovertip(
             self.set_grid_location_button,
-            balloonmsg=(
-                "Use the 'Set grid location' button to specify where you \n" +
-                "are currently located in the grid. \n" +
-                "NOTE: all other grid points will then be referenced by \n" +
-                "this operation (i.e. this operation 'homes' the grid). \n" +
-                "To change the grid origin simply update with this button"))
+            "Use the 'Set grid location' button to specify where you are\n" +
+            "currently located in the grid. \n" +
+            "NOTE: all other grid points will then be referenced by this\n" +
+            "operation (i.e. this operation 'homes' the grid). To change\n" +
+            "the grid origin simply update with this button")
         # current location:
         def _update_grid_location():
             r, c, p_mm = self.grid_list(self.grid_location.get())
@@ -994,16 +965,13 @@ class GuiMicroscope:
         self.grid_location.trace_add(
             'write',
             lambda var, index, mode: _update_grid_location)
-        grid_location_tip = tix.Balloon(self.grid_location_textbox)
-        grid_location_tip.bind_widget(
+        grid_location_tip = Hovertip(
             self.grid_location_textbox,
-            balloonmsg=(
-                "The 'Current grid location' displays the last grid \n" +
-                "location that was moved to (or set) with the \n" +
-                "'GRID NAVIGATOR' panel.\n" +
-                "NOTE: it does not display the current position and is not \n" +
-                "aware of XY moves made elsewhere (e.g. with the joystick \n" +
-                "or 'XY STAGE' panel)."))
+            "The 'Current grid location' displays the last grid location\n" +
+            "that was moved to (or set) with the 'GRID NAVIGATOR' panel.\n" +
+            "NOTE: it does not display the current position and is not \n" +
+            "aware of XY moves made elsewhere (e.g. with the joystick \n" +
+            "or 'XY STAGE' panel).")
         # move to location popup:
         move_to_grid_location_popup = tk.Toplevel()
         move_to_grid_location_popup.title('Move to location')
@@ -1066,15 +1034,12 @@ class GuiMicroscope:
         self.move_to_grid_location_button.grid(
             row=4, column=0, padx=10, pady=10)
         self.move_to_grid_location_button.config(state='disabled')
-        move_to_grid_location_tip = tix.Balloon(
-            self.move_to_grid_location_button)
-        move_to_grid_location_tip.bind_widget(
+        move_to_grid_location_tip = Hovertip(
             self.move_to_grid_location_button,
-            balloonmsg=(
-                "The 'Move to grid location' button moves to the chosen \n" +
-                "grid location based on the absolute XY grid positions \n" +
-                "that have been loaded or created. The grid origin is \n" +
-                "set by the 'Set grid location' button.\n"))
+            "The 'Move to grid location' button moves to the chosen grid\n" +
+            "location based on the absolute XY grid positions that have\n" +
+            "been loaded or created. The grid origin is set by the 'Set\n" +
+            "grid location' button.\n")
         # save data and position:
         self.save_grid_data_and_position = tk.BooleanVar()
         save_grid_data_and_position_button = tk.Checkbutton(
@@ -1083,15 +1048,11 @@ class GuiMicroscope:
             variable=self.save_grid_data_and_position)
         save_grid_data_and_position_button.grid(
             row=5, column=0, padx=10, pady=10, sticky='w')
-        save_grid_data_and_position_tip = tix.Balloon(
-            save_grid_data_and_position_button)
-        save_grid_data_and_position_tip.bind_widget(
+        save_grid_data_and_position_tip = Hovertip(
             save_grid_data_and_position_button,
-            balloonmsg=(
-                "If 'Save data and position' is enabled then the \n" +
-                "'Start grid preview (from A1)' button will save the \n" +
-                "full data set (in addition to the preview data) and \n" +
-                "populate the 'POSITION LIST'."))
+            "If 'Save data and position' is enabled then the 'Start grid\n" +
+            "preview (from A1)' button will save the full data set (in \n" +
+            "addition to the preview data) and populate the 'POSITION LIST'.\n")
         # tile the grid:
         self.tile_the_grid = tk.BooleanVar()
         tile_the_grid_button = tk.Checkbutton(
@@ -1100,13 +1061,11 @@ class GuiMicroscope:
             variable=self.tile_the_grid)
         tile_the_grid_button.grid(
             row=6, column=0, padx=10, pady=10, sticky='w')
-        tile_the_grid_tip = tix.Balloon(tile_the_grid_button)
-        tile_the_grid_tip.bind_widget(
+        tile_the_grid_tip = Hovertip(
             tile_the_grid_button,
-            balloonmsg=(
-                "If 'Tile the grid' is enabled then the 'Start grid \n" +
-                "preview (from A1)' button will tile the grid locations \n" +
-                "with the number of tiles set by the 'TILE NAVIGATOR'."))
+            "If 'Tile the grid' is enabled then the 'Start grid preview\n" +
+            "(from A1)' button will tile the grid locations with the number\n" +
+            "of tiles set by the 'TILE NAVIGATOR'.")
         # start grid preview:
         def _start_grid_preview():
             print('\nGrid preview -> started')
@@ -1231,14 +1190,12 @@ class GuiMicroscope:
             height=button_height)
         self.start_grid_preview_button.grid(row=7, column=0, padx=10, pady=10)
         self.start_grid_preview_button.config(state='disabled')
-        start_grid_preview_tip = tix.Balloon(self.start_grid_preview_button)
-        start_grid_preview_tip.bind_widget(
+        start_grid_preview_tip = Hovertip(
             self.start_grid_preview_button,
-            balloonmsg=(
-                "The 'Start grid preview (from A1)' button will start to \n" +
-                "generate previews for the whole grid of points (starting \n" +
-                "at A1). Consider using 'Save data and position' and 'Tile \n" +
-                "the grid' for extra functionality."))
+            "The 'Start grid preview (from A1)' button will start to \n" +
+            "generate previews for the whole grid of points (starting \n" +
+            "at A1). Consider using 'Save data and position' and 'Tile \n" +
+            "the grid' for extra functionality.")
         return None
 
     def init_tile_navigator(self):
@@ -1257,13 +1214,11 @@ class GuiMicroscope:
             default_value=2,
             row=0,
             width=spinbox_width)
-        tile_array_width_tip = tix.Balloon(self.tile_rc)
-        tile_array_width_tip.bind_widget(
+        tile_array_width_tip = Hovertip(
             self.tile_rc,
-            balloonmsg=(
-                "The 'Array height and width (tiles)' determines how many \n" +
-                "tiles the 'Start tile' button will generate. For example, \n" +
-                "2 gives a 2x2 array of tiles, 3 a 3x3 array, etc."))
+            "The 'Array height and width (tiles)' determines how many tiles\n" +
+            "the 'Start tile' button will generate. For example, 2 gives a\n" +
+            "2x2 array of tiles, 3 a 3x3 array, etc.")
         # save data and position:
         self.save_tile_data_and_position = tk.BooleanVar()
         save_tile_data_and_position_button = tk.Checkbutton(
@@ -1272,15 +1227,11 @@ class GuiMicroscope:
             variable=self.save_tile_data_and_position)
         save_tile_data_and_position_button.grid(
             row=1, column=0, padx=10, pady=10)
-        save_tile_data_and_position_tip = tix.Balloon(
-            save_tile_data_and_position_button)
-        save_tile_data_and_position_tip.bind_widget(
+        save_tile_data_and_position_tip = Hovertip(
             save_tile_data_and_position_button,
-            balloonmsg=(
-                "If 'Save data and position' is enabled then the \n" +
-                "'Start tile' button will save the full data set \n" +
-                "(in addition to the preview data) and populate the \n" +
-                "'POSITION LIST'."))
+            "If 'Save data and position' is enabled then the 'Start tile'\n" +
+            "button will save the full data set (in addition to the preview\n" +
+            "data) and populate the 'POSITION LIST'.\n")
         # start tile preview:
         def _start_tile_preview():
             print('\nTile preview -> started')
@@ -1367,14 +1318,12 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         start_tile_preview_button.grid(row=2, column=0, padx=10, pady=10)
-        start_tile_tip = tix.Balloon(start_tile_preview_button)
-        start_tile_tip.bind_widget(
+        start_tile_tip = Hovertip(
             start_tile_preview_button,
-            balloonmsg=(
-                "The 'Start tile' button will start to generate previews \n" +
-                "for the tile array using the current XY position as the \n" +
-                "first tile (the top left position r0c0). Consider using \n" +
-                "'Save data and position' for extra functionality."))        
+            "The 'Start tile' button will start to generate previews for\n" +
+            "the tile array using the current XY position as the first\n" +
+            "tile (the top left position r0c0). Consider using 'Save data\n" +
+            "and position' for extra functionality.")
         # move to tile popup:
         move_to_tile_popup = tk.Toplevel()
         move_to_tile_popup.title('Move to tile')
@@ -1429,13 +1378,11 @@ class GuiMicroscope:
             height=button_height)
         self.move_to_tile_button.grid(row=4, column=0, padx=10, pady=10)
         self.move_to_tile_button.config(state='disabled')
-        move_to_tile_tip = tix.Balloon(self.move_to_tile_button)
-        move_to_tile_tip.bind_widget(
+        move_to_tile_tip = Hovertip(
             self.move_to_tile_button,
-            balloonmsg=(
-                "The 'Move to tile' button moves to the chosen tile \n" +
-                "location based on the absolute XY tile positions \n" +
-                "from the last tile routine."))
+            "The 'Move to tile' button moves to the chosen tile location\n" +
+            "based on the absolute XY tile positions from the last tile\n" +
+            "routine.")
         return None
 
     def init_settings(self):
@@ -1511,23 +1458,21 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         load_from_file_button.grid(row=0, column=0, padx=10, pady=10)
-        load_from_file_tip = tix.Balloon(load_from_file_button)
-        load_from_file_tip.bind_widget(
+        load_from_file_tip = Hovertip(
             load_from_file_button,
-            balloonmsg=(
-                "Use the 'Load from file' button to select a '.txt' file \n" + 
-                "from the 'metadata' folder of a previous acquisition and \n" +
-                "load these settings into the GUI. The loaded settings are:\n" +
-                "- 'TRANSMITTED LIGHT'.\n" +
-                "- 'LASER BOX'.\n" +
-                "- 'DICHROIC MIRROR'.\n" +
-                "- 'FILTER WHEEL'.\n" +
-                "- 'CAMERA'.\n" +
-                "- 'GALVO'.\n" +
-                "- 'Volumes per acquire'.\n" +
-                "NOTE: 'FOCUS PIEZO', 'XY STAGE', 'Foder label' and \n" +
-                "'Description' are not loaded. To load previous XYZ \n" +
-                "positions use the 'POSITION LIST' panel."))
+            "Use the 'Load from file' button to select a '.txt' file from\n" +
+            "the 'metadata' folder of a previous acquisition and load\n" +
+            "these settings into the GUI. The loaded settings are:\n" +
+            "- 'TRANSMITTED LIGHT'.\n" +
+            "- 'LASER BOX'.\n" +
+            "- 'DICHROIC MIRROR'.\n" +
+            "- 'FILTER WHEEL'.\n" +
+            "- 'CAMERA'.\n" +
+            "- 'GALVO'.\n" +
+            "- 'Volumes per acquire'.\n" +
+            "NOTE: 'FOCUS PIEZO', 'XY STAGE', 'Folder label' and \n" +
+            "'Description' are not loaded. To load previous XYZ\n" +
+            "positions use the 'POSITION LIST' panel.")
         # label textbox:
         self.label_textbox = tkcw.Textbox(
             frame,
@@ -1536,12 +1481,10 @@ class GuiMicroscope:
             row=1,
             width=spinbox_width,
             height=1)
-        label_textbox_tip = tix.Balloon(self.label_textbox)
-        label_textbox_tip.bind_widget(
+        label_textbox_tip = Hovertip(
             self.label_textbox,
-            balloonmsg=(
-                "The label that will be used for the data folder (after \n" +
-                "the date and time stamp). Edit to preference"))
+            "The label that will be used for the data folder (after the\n" +
+            "date and time stamp). Edit to preference")
         # description textbox:
         self.description_textbox = tkcw.Textbox(
             frame,
@@ -1550,13 +1493,11 @@ class GuiMicroscope:
             row=2,
             width=spinbox_width,
             height=3)
-        description_textbox_tip = tix.Balloon(self.description_textbox)
-        description_textbox_tip.bind_widget(
+        description_textbox_tip = Hovertip(
             self.description_textbox,
-            balloonmsg=(
-                "The text that will be recorded in the metadata '.txt'\n" +
-                "file (along with the microscope settings for that \n" +
-                "acquisition). Describe what you are doing here."))        
+            "The text that will be recorded in the metadata '.txt' file\n" +
+            "(along with the microscope settings for that acquisition).\n" +
+            "Describe what you are doing here.")
         # volumes spinbox:
         self.volumes_per_buffer = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -1572,29 +1513,26 @@ class GuiMicroscope:
             'write',
             lambda var, index, mode: self.scope.apply_settings(
                 volumes_per_buffer=self.volumes_per_buffer.value.get()))
-        volumes_per_buffer_tip = tix.Balloon(self.volumes_per_buffer)
-        volumes_per_buffer_tip.bind_widget(
+        volumes_per_buffer_tip = Hovertip(
             self.volumes_per_buffer,
-            balloonmsg=(
-                "In short: How many back to back (as fast as possible) \n" +
-                "volumes did you want for a given acquisition?\n" +
-                "(If you are not sure or don't care then leave this as 1!)\n" +
-                "In detail: increasing this number (above 1 volume) \n" +
-                "pre-loads more acquisitions onto the analogue out (AO) \n" +
-                "card. This has pro's and con's.\n" +
-                "Pros:\n" +
-                "- It allows successive volumes to be taken with minimal \n" +
-                "latency.\n" +
-                "- The timing for successive volumes can be 'us' precise.\n" +
-                "Cons:\n" +
-                "- It takes time to 'load' and 'play' a volume. More \n" +
-                "volumes takes more time, and once requested this \n"
-                "operation cannot be cancelled.\n" +
-                "- The data from a single 'play' of the AO card is \n" +
-                "recording into a single file. More volumes is more data \n" +
-                "and a bigger file. It's easy to end up with a huge file \n" +
-                "that is not a 'legal' .tiff (<~4GB) and is tricky to \n" +
-                "manipulate."))
+            "In short: How many back to back (as fast as possible) volumes\n" +
+            "did you want for a given acquisition?\n" +
+            "(If you are not sure or don't care then leave this as 1!)\n" +
+            "In detail: increasing this number (above 1 volume) pre-loads\n" +
+            "more acquisitions onto the analogue out (AO) card. This has\n" +
+            "pro's and con's.\n" +
+            "Pros:\n" +
+            "- It allows successive volumes to be taken with minimal \n" +
+            "latency.\n" +
+            "- The timing for successive volumes can be 'us' precise.\n" +
+            "Cons:\n" +
+            "- It takes time to 'load' and 'play' a volume. More volumes\n" +
+            "takes more time, and once requested this operation cannot\n"
+            "be cancelled.\n" +
+            "- The data from a single 'play' of the AO card is recording\n" +
+            "into a single file. More volumes is more data and a bigger\n" +
+            "file. It's easy to end up with a huge file that is not a\n" +
+            "'legal' .tiff (<~4GB) and is tricky to manipulate.\n")
         # loop over positions:
         self.loop_over_position_list = tk.BooleanVar()
         loop_over_position_list_button = tk.Checkbutton(
@@ -1603,16 +1541,13 @@ class GuiMicroscope:
             variable=self.loop_over_position_list)
         loop_over_position_list_button.grid(
             row=4, column=0, padx=10, pady=10, sticky='w')
-        loop_over_position_list_tip = tix.Balloon(
-            loop_over_position_list_button)
-        loop_over_position_list_tip.bind_widget(
+        loop_over_position_list_tip = Hovertip(
             loop_over_position_list_button,
-            balloonmsg=(
-                "If checked, the 'Run acquire' button will loop over the \n" +
-                "XYZ positions stored in the 'POSITION LIST'.\n" +
-                "NOTE: it can take a significant amount of time to image \n" +
-                "many positions so this should be taken into consideration \n" +
-                "(especially for a time series)."))
+            "If checked, the 'Run acquire' button will loop over the XYZ\n" +
+            "positions stored in the 'POSITION LIST'.\n" +
+            "NOTE: it can take a significant amount of time to image \n" +
+            "many positions so this should be taken into consideration \n" +
+            "(especially for a time series).")
         # acquire number spinbox:
         self.acquire_number = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -1624,14 +1559,12 @@ class GuiMicroscope:
             default_value=1,
             row=5,
             width=spinbox_width)
-        acquire_number_spinbox_tip = tix.Balloon(self.acquire_number)
-        acquire_number_spinbox_tip.bind_widget(
+        acquire_number_spinbox_tip = Hovertip(
             self.acquire_number,
-            balloonmsg=(
-                "How many acquisitions did you want when you press the \n" +
-                "'Run acquire' button?\n" +
-                "NOTE: there is no immediate limit here, but data \n"
-                "accumulation and thermal drift can limit in practice."))
+            "How many acquisitions did you want when you press\n" +
+            "the 'Run acquire' button?\n" +
+            "NOTE: there is no immediate limit here, but data \n" +
+            "accumulation and thermal drift can limit in practice.")
         # delay spinbox:
         self.delay_s = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -1643,16 +1576,13 @@ class GuiMicroscope:
             default_value=0,
             row=6,
             width=spinbox_width)
-        delay_spinbox_tip = tix.Balloon(self.delay_s)
-        delay_spinbox_tip.bind_widget(
+        delay_spinbox_tip = Hovertip(
             self.delay_s,
-            balloonmsg=(
-                "How long do you want to wait between acquisitions?\n" +
-                "NOTE: the GUI will attempt to achieve the requested \n" +
-                "interval. However, if the acquisition (which may \n" +
-                "include multiple colors/volumes/positions) takes \n" +
-                "longer than the requested delay then it will simply \n" +
-                "run as fast as it can."))        
+            "How long do you want to wait between acquisitions?\n" +
+            "NOTE: the GUI will attempt to achieve the requested interval.\n" +
+            "However, if the acquisition (which may include multiple \n" +
+            "colors/volumes/positions) takes longer than the requested\n" +
+            "delay then it will simply run as fast as it can.\n")       
         return None
 
     def init_settings_output(self):
@@ -1677,15 +1607,13 @@ class GuiMicroscope:
         self.volumes_per_s.trace_add(
             'write',
             lambda var, index, mode: _update_volumes_per_s())
-        volumes_per_s_textbox_tip = tix.Balloon(volumes_per_s_textbox)
-        volumes_per_s_textbox_tip.bind_widget(
+        volumes_per_s_textbox_tip = Hovertip(
             volumes_per_s_textbox,
-            balloonmsg=(
-                "Shows the 'Volumes per second' (Vps) based on the \n" +
-                "settings that were last applied to the microscope.\n" +
-                "NOTE: this is the volumetric rate for the acquisition \n" +
-                "(i.e. during the analogue out 'play') and does reflect \n" +
-                "any delays or latency between acquisitions."))
+            "Shows the 'Volumes per second' (Vps) based on the settings\n" +
+            "that were last applied to the microscope.\n" +
+            "NOTE: this is the volumetric rate for the acquisition (i.e.\n" +
+            "during the analogue out 'play') and does reflect any delays\n" +
+            "or latency between acquisitions.")
         # data memory textbox:
         self.data_bytes = tk.IntVar()
         self.data_buffer_exceeded = tk.BooleanVar()
@@ -1711,14 +1639,12 @@ class GuiMicroscope:
         self.data_bytes.trace_add(
             'write',
             lambda var, index, mode: _update_data_memory())
-        data_memory_textbox_tip = tix.Balloon(data_memory_textbox)
-        data_memory_textbox_tip.bind_widget(
+        data_memory_textbox_tip = Hovertip(
             data_memory_textbox,
-            balloonmsg=(
-                "Shows the 'data buffer memory' (GB) that the microscope\n" +
-                "will need to run the settings that were last applied.\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding memory limits."))
+            "Shows the 'data buffer memory' (GB) that the microscope\n" +
+            "will need to run the settings that were last applied.\n" +
+            "NOTE: this can be useful for montoring resources and \n" +
+            "avoiding memory limits.")
         # preview memory textbox:
         self.preview_bytes = tk.IntVar()
         self.preview_buffer_exceeded = tk.BooleanVar()
@@ -1744,14 +1670,12 @@ class GuiMicroscope:
         self.preview_bytes.trace_add(
             'write',
             lambda var, index, mode: _update_preview_memory())
-        preview_memory_textbox_tip = tix.Balloon(preview_memory_textbox)
-        preview_memory_textbox_tip.bind_widget(
+        preview_memory_textbox_tip = Hovertip(
             preview_memory_textbox,
-            balloonmsg=(
-                "Shows the 'preview buffer memory' (GB) that the microscope\n" +
-                "will need to run the settings that were last applied.\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding memory limits."))
+            "Shows the 'preview buffer memory' (GB) that the microscope\n" +
+            "will need to run the settings that were last applied.\n" +
+            "NOTE: this can be useful for montoring resources and \n" +
+            "avoiding memory limits.")
         # total memory textbox:
         self.total_bytes = tk.IntVar()
         self.total_bytes_exceeded = tk.BooleanVar()
@@ -1777,14 +1701,12 @@ class GuiMicroscope:
         self.total_bytes.trace_add(
             'write',
             lambda var, index, mode: _update_total_memory())
-        total_memory_textbox_tip = tix.Balloon(total_memory_textbox)
-        total_memory_textbox_tip.bind_widget(
+        total_memory_textbox_tip = Hovertip(
             total_memory_textbox,
-            balloonmsg=(
-                "Shows the 'total memory' (GB) that the microscope\n" +
-                "will need to run the settings that were last applied.\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding memory limits."))
+            "Shows the 'total memory' (GB) that the microscope\n" +
+            "will need to run the settings that were last applied.\n" +
+            "NOTE: this can be useful for montoring resources and \n" +
+            "avoiding memory limits.")
         # total storage textbox:
         total_storage_textbox = tkcw.Textbox(
             frame,
@@ -1808,15 +1730,13 @@ class GuiMicroscope:
         self.total_bytes.trace_add(
             'write',
             lambda var, index, mode: _update_total_storage())
-        total_storage_textbox_tip = tix.Balloon(total_storage_textbox)
-        total_storage_textbox_tip.bind_widget(
+        total_storage_textbox_tip = Hovertip(
             total_storage_textbox,
-            balloonmsg=(
-                "Shows the 'total storage' (GB) that the microscope will \n" +
-                "need to save the data if 'Run acquire' is pressed (based \n" +
-                "on the settings that were last applied).\n" +
-                "NOTE: this can be useful for montoring resources and \n" +
-                "avoiding storage limits."))
+            "Shows the 'total storage' (GB) that the microscope will \n" +
+            "need to save the data if 'Run acquire' is pressed (based \n" +
+            "on the settings that were last applied).\n" +
+            "NOTE: this can be useful for montoring resources and \n" +
+            "avoiding storage limits.")
         # min time textbox:
         self.buffer_time_s = tk.DoubleVar()
         min_time_textbox = tkcw.Textbox(
@@ -1845,16 +1765,14 @@ class GuiMicroscope:
         self.buffer_time_s.trace_add(
             'write',
             lambda var, index, mode: _update_min_time())
-        min_time_textbox_tip = tix.Balloon(min_time_textbox)
-        min_time_textbox_tip.bind_widget(
+        min_time_textbox_tip = Hovertip(
             min_time_textbox,
-            balloonmsg=(
-                "Shows the 'Minimum acquire time (s)' that the microscope \n" +
-                "will need if 'Run acquire' is pressed (based on the \n" +
-                "settings that were last applied).\n" +
-                "NOTE: this value does not take into account the \n" +
-                "'move time' when using the 'Loop over position list' \n" +
-                "option (so the actual time will be significantly more)."))
+            "Shows the 'Minimum acquire time (s)' that the microscope will\n" +
+            "need if 'Run acquire' is pressed (based on the settings that\n" +
+            "were last applied).\n" +
+            "NOTE: this value does not take into account the 'move time'\n" +
+            "when using the 'Loop over position list' option (so the actual\n" +
+            "time will be significantly more).")
         return None
 
     def init_position_list(self):
@@ -1913,14 +1831,12 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         load_from_folder_button.grid(row=0, column=0, padx=10, pady=10)
-        load_from_folder_tip = tix.Balloon(load_from_folder_button)
-        load_from_folder_tip.bind_widget(
+        load_from_folder_tip = Hovertip(
             load_from_folder_button,
-            balloonmsg=(
-                "Use the 'Load from folder' button to select a previous \n" + 
-                "'sols_gui_session' folder and load the associated \n" +
-                "position list into the GUI.\n" +
-                "NOTE: this will overwrite any existing position list"))
+            "Use the 'Load from folder' button to select a previous \n" +
+            "'sols_gui_session' folder and load the associated position\n" +
+            "list into the GUI.\n" +
+            "NOTE: this will overwrite any existing position list")
         # delete all:
         def _delete_all_positions():
             # empty the lists:
@@ -1944,14 +1860,12 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         delete_all_positions_button.grid(row=1, column=0, padx=10, pady=10)
-        delete_all_positions_tip = tix.Balloon(delete_all_positions_button)
-        delete_all_positions_tip.bind_widget(
+        delete_all_positions_tip = Hovertip(
             delete_all_positions_button,
-            balloonmsg=(
-                "The 'Delete all positions' button clears the current \n" + 
-                "position list in the GUI and updates the associated \n" +
-                ".txt files in the 'sols_gui_session' folder.\n" +
-                "NOTE: this operation cannot be reversed."))
+            "The 'Delete all positions' button clears the current position\n" +
+            "list in the GUI and updates the associated .txt files in the\n" +
+            "'sols_gui_session' folder.\n" +
+            "NOTE: this operation cannot be reversed.")
         # delete current:
         def _delete_current_position():
             if self.total_positions.value.get() == 0:
@@ -1980,16 +1894,12 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         delete_current_position_button.grid(row=2, column=0, padx=10, pady=10)
-        delete_current_position_tip = tix.Balloon(
-            delete_current_position_button)
-        delete_current_position_tip.bind_widget(
+        delete_current_position_tip = Hovertip(
             delete_current_position_button,
-            balloonmsg=(
-                "The 'Delete current position' button clears the current \n" + 
-                "position from the position list in the GUI and updates \n" +
-                "the associated .txt files in the 'sols_gui_session' \n" +
-                "folder.\n" +
-                "NOTE: this operation cannot be reversed."))
+            "The 'Delete current position' button clears the current \n" +
+            "position from the position list in the GUI and updates \n" +
+            "the associated .txt files in the 'sols_gui_session' folder.\n" +
+            "NOTE: this operation cannot be reversed.")
         # total positions:
         self.total_positions = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -2002,14 +1912,11 @@ class GuiMicroscope:
             row=3,
             width=spinbox_width)
         self.total_positions.spinbox.config(state='disabled')
-        total_positions_spinbox_tip = tix.Balloon(self.total_positions)
-        total_positions_spinbox_tip.bind_widget(
+        total_positions_spinbox_tip = Hovertip(
             self.total_positions,
-            balloonmsg=(
-                "The 'Total positions' displays the total number of \n" + 
-                "positions currently stored in the position list (both in \n" +
-                "the GUI and the associated .txt files in the\n" +
-                "'sols_gui_session' folder."))
+            "The 'Total positions' displays the total number of positions\n" +
+            "currently stored in the position list (both in the GUI and the\n" +
+            "associated .txt files in the 'sols_gui_session' folder.\n")
         # utility function:
         def _update_position(how):
             current_position = self.current_position.value.get()
@@ -2051,14 +1958,12 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         move_to_start_button.grid(row=4, column=0, padx=10, pady=10)
-        move_to_start_button_tip = tix.Balloon(move_to_start_button)
-        move_to_start_button_tip.bind_widget(
+        move_to_start_button_tip = Hovertip(
             move_to_start_button,
-            balloonmsg=(
-                "The 'Move to start' button will move the 'FOCUS PIEZO' \n" + 
-                "and 'XY STAGE' to the first position in the position list.\n" +
-                "NOTE: this is only active in 'Scout mode' and if the \n" +
-                "position is not already at the start of the position list."))
+            "The 'Move to start' button will move the 'FOCUS PIEZO' and\n" +
+            "'XY STAGE' to the first position in the position list.\n" +
+            "NOTE: this is only active in 'Scout mode' and if the position\n" +
+            "is not already at the start of the position list.")
         # move back:
         move_back_button = tk.Button(
             frame,
@@ -2067,13 +1972,11 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         move_back_button.grid(row=5, column=0, padx=10, pady=10)
-        move_back_button_tip = tix.Balloon(move_back_button)
-        move_back_button_tip.bind_widget(
+        move_back_button_tip = Hovertip(
             move_back_button,
-            balloonmsg=(
-                "The 'Move back (-1)' button will move the 'FOCUS PIEZO' \n" + 
-                "and 'XY STAGE' to the previous (n - 1) position in the \n" +
-                "position list."))
+            "The 'Move back (-1)' button will move the 'FOCUS PIEZO' and\n" +
+            "'XY STAGE' to the previous (n - 1) position in the position\n" +
+            "list.")
         # current position:
         self.current_position = tkcw.CheckboxSliderSpinbox(
             frame,
@@ -2086,17 +1989,14 @@ class GuiMicroscope:
             row=6,
             width=spinbox_width)
         self.current_position.spinbox.config(state='disabled')
-        current_position_spinbox_tip = tix.Balloon(self.current_position)
-        current_position_spinbox_tip.bind_widget(
+        current_position_spinbox_tip = Hovertip(
             self.current_position,
-            balloonmsg=(
-                "The 'Current position' displays the current position in \n" + 
-                "the position list based on the last update to the \n" +
-                "position list or move request in the 'POSITION LIST' \n" +
-                "panel.\n" +
-                "NOTE: is not aware of XY moves made elsewhere (e.g. with \n" +
-                "the joystick or 'XY STAGE' panel). Use one of the 'move' \n" +
-                "buttons to update if needed."))
+            "The 'Current position' displays the current position in the\n" +
+            "position list based on the last update to the position list\n" +
+            "or move request in the 'POSITION LIST' panel.\n" +
+            "NOTE: is not aware of XY moves made elsewhere (e.g. with the\n" +
+            "joystick or 'XY STAGE' panel). Use one of the 'move' buttons\n" +
+            "to update if needed.")
         # go forwards:
         move_forward_button = tk.Button(
             frame,
@@ -2105,13 +2005,11 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         move_forward_button.grid(row=7, column=0, padx=10, pady=10)
-        move_forward_button_tip = tix.Balloon(move_forward_button)
-        move_forward_button_tip.bind_widget(
+        move_forward_button_tip = Hovertip(
             move_forward_button,
-            balloonmsg=(
-                "The 'Move forward (+1)' button will move the 'FOCUS \n" + 
-                "PIEZO' and 'XY STAGE' to the next (n + 1) position in \n" +
-                "the position list."))
+            "The 'Move forward (+1)' button will move the 'FOCUS PIEZO'\n" +
+            "and 'XY STAGE' to the next (n + 1) position in the position\n" +
+            "list.")
         # move to end:
         move_to_end_button = tk.Button(
             frame,
@@ -2120,12 +2018,10 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         move_to_end_button.grid(row=8, column=0, padx=10, pady=10)
-        move_to_end_button_tip = tix.Balloon(move_to_end_button)
-        move_to_end_button_tip.bind_widget(
+        move_to_end_button_tip = Hovertip(
             move_to_end_button,
-            balloonmsg=(
-                "The 'Move to end' button will move the 'FOCUS PIEZO' \n" + 
-                "and 'XY STAGE' to the last position in the position list."))        
+            "The 'Move to end' button will move the 'FOCUS PIEZO' and\n" +
+            "'XY STAGE' to the last position in the position list.")        
         return None
 
     def _update_position_list(self):
@@ -2163,14 +2059,12 @@ class GuiMicroscope:
             width=button_width + bold_width_adjust,
             height=button_height)
         snap_volume_button.grid(row=0, column=0, padx=10, pady=10)
-        snap_volume_button_tip = tix.Balloon(snap_volume_button)
-        snap_volume_button_tip.bind_widget(
+        snap_volume_button_tip = Hovertip(
             snap_volume_button,
-            balloonmsg=(
-                "The 'Snap volume' button will apply the lastest \n" + 
-                "microscope settings and acquire a volume. This is \n" +
-                "useful for refreshing the display.\n" +
-                "NOTE: this does not save any data or position information."))
+            "The 'Snap volume' button will apply the lastest microscope\n" +
+            "settings and acquire a volume. This is useful for refreshing\n" +
+            "the display.\n" +
+            "NOTE: this does not save any data or position information.")
         # live mode:
         def _live_mode():
             if self.running_live_mode.get():
@@ -2196,16 +2090,14 @@ class GuiMicroscope:
             width=button_width,
             height=button_height)
         live_mode_button.grid(row=1, column=0, padx=10, pady=10)
-        live_mode_button_tip = tix.Balloon(live_mode_button)
-        live_mode_button_tip.bind_widget(
+        live_mode_button_tip = Hovertip(
             live_mode_button,
-            balloonmsg=(
-                "The 'Live mode (On/Off)' button will enable/disable 'Live \n" + 
-                "mode'. 'Live mode' will continously apply the lastest \n" +
-                "microscope settings and acquire a volume.\n" +
-                "NOTE: this continously exposes the sample to light which \n" +
-                "may cause photobleaching/phototoxicity. To reduce this \n" +
-                "effect use 'Scout mode'.")) 
+            "The 'Live mode (On/Off)' button will enable/disable 'Live \n" +
+            "mode'. 'Live mode' will continously apply the lastest \n" +
+            "microscope settings and acquire a volume.\n" +
+            "NOTE: this continously exposes the sample to light which \n" +
+            "may cause photobleaching/phototoxicity. To reduce this \n" +
+            "effect use 'Scout mode'.")
         # scout mode:
         def _scout_mode():
             self._set_running_mode('scout_mode')
@@ -2224,14 +2116,12 @@ class GuiMicroscope:
             width=button_width + bold_width_adjust,
             height=button_height)
         scout_mode_button.grid(row=2, column=0, padx=10, pady=10)
-        scout_mode_button_tip = tix.Balloon(scout_mode_button)
-        scout_mode_button_tip.bind_widget(
+        scout_mode_button_tip = Hovertip(
             scout_mode_button,
-            balloonmsg=(
-                "The 'Scout mode (On/Off)' button will enable/disable \n" + 
-                "'Scout mode'. 'Scout mode' will only acquire a volume\n" +
-                "if XYZ motion is detected. This helps to reduce \n" +
-                "photobleaching/phototoxicity."))
+            "The 'Scout mode (On/Off)' button will enable/disable \n" +
+            "'Scout mode'. 'Scout mode' will only acquire a volume\n" +
+            "if XYZ motion is detected. This helps to reduce \n" +
+            "photobleaching/phototoxicity.")
         # save volume and position:
         def _save_volume_and_position():
             if self.volumes_per_buffer.value.get() != 1:
@@ -2252,14 +2142,11 @@ class GuiMicroscope:
             width=button_width + bold_width_adjust,
             height=button_height)
         save_volume_and_position_button.grid(row=3, column=0, padx=10, pady=10)
-        save_volume_and_position_tip = tix.Balloon(
-            save_volume_and_position_button)
-        save_volume_and_position_tip.bind_widget(
+        save_volume_and_position_tip = Hovertip(
             save_volume_and_position_button,
-            balloonmsg=(
-                "The 'Save volume and position' button will apply the \n" + 
-                "latest microscope settings, save a volume and add the \n" +
-                "current position to the position list."))
+            "The 'Save volume and position' button will apply the latest\n" +
+            "microscope settings, save a volume and add the current\n" +
+            "position to the position list.")
         # run acquire:
         def _acquire():
             print('\nAcquire -> started')
@@ -2337,22 +2224,19 @@ class GuiMicroscope:
             width=button_width + bold_width_adjust,
             height=button_height)
         acquire_button.grid(row=4, column=0, padx=10, pady=10)
-        acquire_button_tip = tix.Balloon(acquire_button)
-        acquire_button_tip.bind_widget(
+        acquire_button_tip = Hovertip(
             acquire_button,
-            balloonmsg=(
-                "The 'Run acquire' button will run a full acquisition \n" + 
-                "and may include: \n" +
-                "- multiple colors (enable with the 'TRANSMITTED LIGHT' \n" +
-                "and 'LASER BOX' panels).\n"
-                "- multiple positions (populate the 'POSITION LIST' and \n" +
-                "enable 'Loop over position list').\n"
-                "- multiple fast volumes per position (set 'Volumes per \n" +
-                "acquire' > 1).\n"
-                "- multiple iterations of the above (set 'Acquire number' \n" +
-                "> 1).\n"
-                "- a time delay between successive iterations of the above \n" +
-                "(set 'Inter-acquire delay (s)' > the time per iteration)"))
+            "The 'Run acquire' button will run a full acquisition and may\n" +
+            "include: \n" +
+            "- multiple colors (enable with the 'TRANSMITTED LIGHT' and\n" +
+            "'LASER BOX' panels).\n" +
+            "- multiple positions (populate the 'POSITION LIST' and enable\n" +
+            "'Loop over position list').\n" +
+            "- multiple fast volumes per position (set 'Volumes per\n" +
+            "acquire' > 1).\n" +
+            "- multiple iterations of the above (set 'Acquire number' > 1).\n" +
+            "- a time delay between successive iterations of the above \n" +
+            "(set 'Inter-acquire delay (s)' > the time per iteration)")
         return None
 
     def init_exit(self):
@@ -2370,12 +2254,10 @@ class GuiMicroscope:
             height=2,
             width=25)
         exit_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
-        exit_button_tip = tix.Balloon(exit_button)
-        exit_button_tip.bind_widget(
+        exit_button_tip = Hovertip(
             exit_button,
-            balloonmsg=(
-                "The 'EXIT GUI' button will close down the microscope \n" +
-                "without errors. It's the right way the end the GUI session."))
+            "The 'EXIT GUI' button will close down the microscope without\n" +
+            "errors. It's the right way the end the GUI session.")
         return None
 
     def init_running_mode(self):
@@ -2406,13 +2288,11 @@ class GuiMicroscope:
             width=25,
             height=2)
         self.cancel_running_mode_button.grid(row=8, column=0, padx=10, pady=10)
-        cancel_running_mode_tip = tix.Balloon(self.cancel_running_mode_button)
-        cancel_running_mode_tip.bind_widget(
+        cancel_running_mode_tip = Hovertip(
             self.cancel_running_mode_button,
-            balloonmsg=(
-                "Cancel the current process.\n" +
-                "NOTE: this is not immediate since some processes must \n" +
-                "finish once launched."))
+            "Cancel the current process.\n" +
+            "NOTE: this is not immediate since some processes must finish\n" +
+            "once launched.")
         return None
 
     def _set_running_mode(self, mode):
@@ -2443,3 +2323,4 @@ class GuiMicroscope:
 
 if __name__ == '__main__':
     gui_microscope = GuiMicroscope(init_microscope=True)
+
