@@ -26,7 +26,6 @@ class GuiMicroscope:
         font.nametofont("TkDefaultFont").configure(size=size)
         font.nametofont("TkFixedFont").configure(size=size)
         font.nametofont("TkTextFont").configure(size=size)
-        self.gui_delay_ms = int(1e3 * 1 / 30) # 30fps/video rate target
         # load hardware GUI's:
         self.init_transmitted_light()
         self.init_laser_box()
@@ -90,7 +89,7 @@ class GuiMicroscope:
                 self.volumes_per_s.set(self.scope.volumes_per_s)
                 # check joystick:
                 self._check_joystick()
-                self.root.after(self.gui_delay_ms, _run_check_microscope)
+                self.root.after(int(1e3/10), _run_check_microscope) # 10fps
                 return None
             _run_check_microscope()
             # run snoutfocus periodically:
@@ -1121,7 +1120,7 @@ class GuiMicroscope:
                     preview_only=preview_only).get_result()
                 grid_preview_filename = (folder_name + '\\preview\\' + filename)
                 while not os.path.isfile(grid_preview_filename):
-                    self.root.after(self.gui_delay_ms)
+                    self.root.after(int(1e3/30)) # 30fps
                 image = imread(grid_preview_filename)
                 if len(image.shape) == 2:
                     image = image[np.newaxis,:] # add channels, no volumes                
@@ -1171,7 +1170,7 @@ class GuiMicroscope:
                     self.current_grid_preview < len(
                         self.grid_preview_list) - 1):
                     self.current_grid_preview += 1
-                    self.root.after(self.gui_delay_ms, _run_grid_preview)
+                    self.root.after(int(1e3/30), _run_grid_preview) # 30fps
                 else:
                     self._set_running_mode('None')
                     print('Grid preview -> finished\n')
@@ -1268,7 +1267,7 @@ class GuiMicroscope:
                     preview_only=preview_only).get_result()
                 tile_filename = (folder_name + '\\preview\\' + filename)
                 while not os.path.isfile(tile_filename):
-                    self.root.after(self.gui_delay_ms)
+                    self.root.after(int(1e3/30)) # 30fps
                 tile = imread(tile_filename)
                 if len(tile.shape) == 2:
                     tile = tile[np.newaxis,:] # add channels, no volumes
@@ -1299,7 +1298,7 @@ class GuiMicroscope:
                 if (self.running_tile_preview.get() and
                     self.current_tile < len(self.tile_list) - 1): 
                     self.current_tile += 1
-                    self.root.after(self.gui_delay_ms, _run_tile_preview)
+                    self.root.after(int(1e3/30), _run_tile_preview) # 30fp
                 else:
                     self._set_running_mode('None')
                     self.move_to_tile_button.config(state='normal')
@@ -2075,7 +2074,7 @@ class GuiMicroscope:
                 if self.running_live_mode.get():
                     if not self.last_acquire_task.is_alive():
                         self._snap_and_display()
-                    self.root.after(self.gui_delay_ms, _run_live_mode)
+                    self.root.after(int(1e3/30), _run_live_mode) # 30 fps
                 return None
             _run_live_mode()
             return None
@@ -2323,4 +2322,3 @@ class GuiMicroscope:
 
 if __name__ == '__main__':
     gui_microscope = GuiMicroscope(init_microscope=True)
-
