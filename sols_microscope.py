@@ -81,9 +81,11 @@ class Microscope:
         slow_camera_init.get_result()
         slow_fw_init.get_result()
         # set defaults:
-        self.dichroic_mirror = tuple(dichroic_mirror_options.keys())[0]
+        # -> apply_settings args
         self.timestamp_mode = "binary+ASCII"
-        self.camera._set_timestamp_mode(self.timestamp_mode) # default on        
+        self.camera._set_timestamp_mode(self.timestamp_mode) # default on
+        self.focus_piezo_z_um = self.focus_piezo.z
+        self.XY_stage_position_mm = self.XY_stage.x, self.XY_stage.y
         self.max_bytes_per_buffer = (2**31) # legal tiff
         self.max_data_buffers = 4 # camera, preview, display, filesave
         self.max_preview_buffers = self.max_data_buffers
@@ -91,6 +93,8 @@ class Microscope:
         # The pco_edge42_cl has unreliable pixel rows at the top and bottom,
         # so for clean previews it's best to remove them:
         self.preview_crop_px = 3 # crop top and bottom pixel rows for previews
+        # -> additional
+        self.dichroic_mirror = tuple(dichroic_mirror_options.keys())[0]
         self.num_active_data_buffers = 0
         self.num_active_preview_buffers = 0
         self._settings_applied = False
