@@ -65,14 +65,12 @@ class GuiMicroscope:
                 voxel_aspect_ratio   = self.voxel_aspect_ratio.value.get(),
                 scan_range_um        = self.scan_range_um.value.get(),
                 volumes_per_buffer   = self.volumes_per_buffer.value.get(),
-                focus_piezo_z_um     = (0, 'relative'),
-                XY_stage_position_mm = (0, 0, 'relative')
                 ).get_result() # finish
             # get XYZ direct from hardware and update gui to aviod motion:
             self.focus_piezo_z_um.update_and_validate(
-                int(round(self.scope.focus_piezo.z)))
+                int(round(self.scope.focus_piezo_z_um)))
             self._update_XY_stage_position(
-                [self.scope.XY_stage.x, self.scope.XY_stage.y])
+                self.scope.XY_stage_position_mm)
             # check microscope periodically:
             def _run_check_microscope():
                 self.scope.apply_settings().get_result() # update attributes
