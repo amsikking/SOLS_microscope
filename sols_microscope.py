@@ -86,6 +86,7 @@ class Microscope:
         self.camera._set_timestamp_mode(self.timestamp_mode) # default on
         self.focus_piezo_z_um = self.focus_piezo.z
         self.XY_stage_position_mm = self.XY_stage.x, self.XY_stage.y
+        self.camera_preframes = 0 # ditch some noisy frames before recording?
         self.max_bytes_per_buffer = (2**31) # legal tiff
         self.max_data_buffers = 4 # camera, preview, display, filesave
         self.max_preview_buffers = self.max_data_buffers
@@ -243,6 +244,11 @@ class Microscope:
             - galvo_scan_volts/2, galvo_scan_volts/2, self.slices_per_volume)
         # Calculate voltages:
         voltages = []
+        # Add preframes (if any):
+        for frames in range(self.camera_preframes):
+            v = np.zeros((period_px, self.ao.num_channels), 'float64')
+            v[:rolling_px, n2c['camera']] = 5 # falling edge-> light on!
+            voltages.append(v)
         for volumes in range(self.volumes_per_buffer):
             # TODO: either bidirectional volumes, or smoother galvo flyback
             for _slice in range(self.slices_per_volume):
@@ -324,6 +330,7 @@ class Microscope:
             'volumes_per_buffer':self.volumes_per_buffer,
             'focus_piezo_z_um':self.focus_piezo_z_um,
             'XY_stage_position_mm':self.XY_stage_position_mm,
+            'camera_preframes':self.camera_preframes,
             'max_bytes_per_buffer':self.max_bytes_per_buffer,
             'max_data_buffers':self.max_data_buffers,
             'max_preview_buffers':self.max_preview_buffers,
@@ -501,6 +508,7 @@ class Microscope:
         volumes_per_buffer=None,    # Int
         focus_piezo_z_um=None,      # (Float, "relative" or "absolute")
         XY_stage_position_mm=None,  # (Float, Float, "relative" or "absolute")
+        camera_preframes=None,      # Int
         max_bytes_per_buffer=None,  # Int
         max_data_buffers=None,      # Int
         max_preview_buffers=None,   # Int
@@ -580,7 +588,8 @@ class Microscope:
                 illumination_time_us is not None or
                 voxel_aspect_ratio is not None or
                 scan_range_um is not None or
-                volumes_per_buffer is not None):
+                volumes_per_buffer is not None or
+                camera_preframes is not None):
                 for channel in self.channels_per_slice:
                     assert channel in self.illumination_sources
                 assert len(self.power_per_channel) == (
@@ -588,6 +597,9 @@ class Microscope:
                 for power in self.power_per_channel: assert 0 <= power <= 100
                 assert type(self.volumes_per_buffer) is int
                 assert self.volumes_per_buffer > 0
+                assert type(self.camera_preframes) is int
+                self.camera.num_images = ( # update attribute
+                    self.images + self.camera_preframes)
                 self.camera.num_images = self.images # update attribute
                 self.voltages = self._calculate_voltages()
                 write_voltages_thread = ct.ResultThread(
@@ -651,7 +663,7 @@ class Microscope:
             l_px = self.preview_line_px
             c_px = self.preview_crop_px
             ts   = self.timestamp_mode
-            im   = self.images
+            im   = self.images + self.camera_preframes
             data_buffer = self._get_data_buffer((im, h_px, w_px), 'uint16')
             # camera.record_to_memory() blocks, so we use a thread:
             camera_thread = ct.ResultThread(
@@ -672,7 +684,8 @@ class Microscope:
             camera_thread.get_result()
             custody.switch_from(self.camera, to=self.datapreview)
             # Acquisition is 3D, but display and filesaving are 5D:
-            data_buffer = data_buffer.reshape(vo, sl, ch, h_px, w_px)
+            data_buffer = data_buffer[ # ditch preframes
+                self.camera_preframes:, :, :].reshape(vo, sl, ch, h_px, w_px)
             preview_shape = DataPreview.shape(
                 vo, sl, ch, h_px, w_px, s_px, l_px, c_px, ts)
             preview_buffer = self._get_preview_buffer(preview_shape, 'uint16')
