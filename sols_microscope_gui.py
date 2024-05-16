@@ -2144,6 +2144,21 @@ class GuiMicroscope:
             "The 'Save volume and position' button will apply the latest\n" +
             "microscope settings, save a volume and add the current\n" +
             "position to the position list.")
+        # preview only:
+        self.preview_only = tk.BooleanVar()
+        preview_only_button = tk.Checkbutton(
+            frame,
+            text='Save preview only',
+            variable=self.preview_only)
+        preview_only_button.grid(
+            row=4, column=0, padx=10, pady=10, sticky='w')
+        preview_only_tip = Hovertip(
+            preview_only_button,
+            "If checked, the 'Run acquire' button will save 'preview only'\n" +
+            "data and the raw data (full volume) will be discarded. This can\n" +
+            "greatly reduce the amount of stored/saved data.\n"
+            "NOTE: when running in this mode the raw data (full volume)\n" +
+            "cannot be recovered.\n")
         # run acquire:
         def _acquire():
             print('\nAcquire -> started')
@@ -2162,7 +2177,8 @@ class GuiMicroscope:
                     self.scope.acquire(
                         filename='%06i.tif'%self.acquire_count,
                         folder_name=self.folder_name,
-                        description=self.description_textbox.text)
+                        description=self.description_textbox.text,
+                        preview_only=self.preview_only.get())
                     self.acquire_count += 1
                     if self.delay_s.value.get() > self.scope.buffer_time_s:
                         wait_ms = int(round(1e3 * self.delay_s.value.get()))                    
@@ -2179,7 +2195,8 @@ class GuiMicroscope:
                         filename='%06i_p%06i.tif'%(
                             self.acquire_count, self.acquire_position),
                         folder_name=self.folder_name,
-                        description=self.description_textbox.text)
+                        description=self.description_textbox.text,
+                        preview_only=self.preview_only.get())
                     if self.acquire_position < (
                         self.total_positions.value.get() - 1):
                         self.acquire_position +=1
@@ -2220,7 +2237,7 @@ class GuiMicroscope:
             fg='red',
             width=button_width + bold_width_adjust,
             height=button_height)
-        acquire_button.grid(row=4, column=0, padx=10, pady=10)
+        acquire_button.grid(row=5, column=0, padx=10, pady=10)
         acquire_button_tip = Hovertip(
             acquire_button,
             "The 'Run acquire' button will run a full acquisition and may\n" +
