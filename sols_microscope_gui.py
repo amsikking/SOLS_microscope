@@ -2042,7 +2042,7 @@ class GuiMicroscope:
     def init_acquire(self):
         frame = tk.LabelFrame(
             self.root, text='ACQUIRE', font=('Segoe UI', '10', 'bold'), bd=6)
-        frame.grid(row=6, column=6, rowspan=2, padx=5, pady=5, sticky='n')
+        frame.grid(row=6, column=6, rowspan=3, padx=5, pady=5, sticky='n')
         frame.bind('<Enter>', lambda event: frame.focus_set()) # force update
         button_width, button_height = 25, 2
         bold_width_adjust = -3
@@ -2256,7 +2256,7 @@ class GuiMicroscope:
     def init_exit(self):
         frame = tk.LabelFrame(
             self.root, text='EXIT', font=('Segoe UI', '10', 'bold'), bd=6)
-        frame.grid(row=8, column=6, padx=5, pady=5, sticky='s')
+        frame.grid(row=9, column=6, padx=5, pady=5, sticky='s')
         def _exit():
             if self.init_microscope: self.scope.close()
             self.root.quit()
