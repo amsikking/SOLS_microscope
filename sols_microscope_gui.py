@@ -17,8 +17,7 @@ import sols_microscope as sols          # github.com/amsikking/sols_microscope
 import tkinter_compound_widgets as tkcw # github.com/amsikking/tkinter
 
 class GuiMicroscope:
-    def __init__(self, init_microscope=True): # set False for GUI design...
-        self.init_microscope = init_microscope 
+    def __init__(self, init_microscope=True): # set False for GUI design... 
         self.root = tk.Tk()
         self.root.title('SOLS Microscope GUI')
         # adjust font size and delay:
@@ -42,7 +41,6 @@ class GuiMicroscope:
         self.init_settings_output() # shows output from settings
         self.init_position_list()   # navigates position lists
         self.init_acquire()         # microscope methods
-        self.init_exit()            # exit the GUI
         self.init_running_mode()    # toggles between different modes
         # optionally initialize microscope:
         if init_microscope:
@@ -105,9 +103,13 @@ class GuiMicroscope:
             # snap a volume and enable scout mode:
             self.last_acquire_task = self.scope.acquire()
             self.running_scout_mode.set(True)
+        # add close function + any commands for when the user hits the 'X'
+        def _close():
+            if init_microscope: self.scope.close()
+            self.root.destroy()
+        self.root.protocol("WM_DELETE_WINDOW", _close)
         # start event loop:
-        self.root.mainloop() # blocks here until 'QUIT'
-        self.root.destroy()
+        self.root.mainloop() # blocks here until 'X'
 
     def init_transmitted_light(self):
         frame = tk.LabelFrame(self.root, text='TRANSMITTED LIGHT', bd=6)
@@ -2251,27 +2253,6 @@ class GuiMicroscope:
             "- multiple iterations of the above (set 'Acquire number' > 1).\n" +
             "- a time delay between successive iterations of the above \n" +
             "(set 'Inter-acquire delay (s)' > the time per iteration)")
-        return None
-
-    def init_exit(self):
-        frame = tk.LabelFrame(
-            self.root, text='EXIT', font=('Segoe UI', '10', 'bold'), bd=6)
-        frame.grid(row=9, column=6, padx=5, pady=5, sticky='s')
-        def _exit():
-            if self.init_microscope: self.scope.close()
-            self.root.quit()
-            return None
-        exit_button = tk.Button(
-            frame,
-            text="EXIT GUI",
-            command=_exit,
-            height=2,
-            width=25)
-        exit_button.grid(row=0, column=0, padx=10, pady=10, sticky='n')
-        exit_button_tip = Hovertip(
-            exit_button,
-            "The 'EXIT GUI' button will close down the microscope without\n" +
-            "errors. It's the right way the end the GUI session.")
         return None
 
     def init_running_mode(self):
