@@ -768,6 +768,12 @@ class GuiMicroscope:
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         create_grid_popup.geometry("+%d+%d" % (x + 800, y + 400))
         create_grid_popup.withdraw()
+        def _close_create_grid_popup():
+            create_grid_popup.withdraw()
+            create_grid_popup.grab_release()
+            return None
+        create_grid_popup.protocol(
+            "WM_DELETE_WINDOW", _close_create_grid_popup)
         # popup input:
         spinbox_width = 20
         self.grid_rows = tkcw.CheckboxSliderSpinbox(
@@ -843,19 +849,6 @@ class GuiMicroscope:
             height=button_height,
             width=button_width)
         create_grid_button.grid(row=3, column=0, padx=10, pady=10, sticky='n')
-        # popup exit button:
-        def _exit_grid_popup():
-            create_grid_popup.withdraw()
-            create_grid_popup.grab_release()
-            return None
-        exit_grid_popup_button = tk.Button(
-            create_grid_popup,
-            text="Exit",
-            command=_exit_grid_popup,
-            height=button_height,
-            width=button_width)
-        exit_grid_popup_button.grid(
-            row=4, column=0, padx=10, pady=10, sticky='n')
         # create grid popup button:
         def _create_grid_popup():
             create_grid_popup.deiconify()
@@ -883,6 +876,12 @@ class GuiMicroscope:
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         set_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
         set_grid_location_popup.withdraw()
+        def _close_set_grid_location_popup():
+            set_grid_location_popup.withdraw()
+            set_grid_location_popup.grab_release()
+            return None
+        set_grid_location_popup.protocol(
+            "WM_DELETE_WINDOW", _close_set_grid_location_popup)
         # set location button:
         def _set_grid_location():
             set_grid_location_popup.deiconify()
@@ -977,19 +976,12 @@ class GuiMicroscope:
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         move_to_grid_location_popup.geometry("+%d+%d" % (x + 800, y + 400))
         move_to_grid_location_popup.withdraw()
-        # cancel popup button:
-        def _cancel_move_to_grid_location():
+        def _close_move_to_grid_location_popup():
             move_to_grid_location_popup.withdraw()
             move_to_grid_location_popup.grab_release()
             return None
-        cancel_move_to_grid_location_button = tk.Button(
-            move_to_grid_location_popup,
-            text="Cancel",
-            command=_cancel_move_to_grid_location,
-            height=button_height,
-            width=button_width)
-        cancel_move_to_grid_location_button.grid(
-            row=1, column=0, padx=10, pady=10, sticky='n')
+        move_to_grid_location_popup.protocol(
+            "WM_DELETE_WINDOW", _close_move_to_grid_location_popup)
         # move to location button:
         def _move_to_grid_location():
             move_to_grid_location_popup.deiconify()
@@ -1009,7 +1001,7 @@ class GuiMicroscope:
                 if grid == 0:
                     self.start_grid_preview_button.config(state='normal')
                 # exit:
-                _cancel_move_to_grid_location()
+                _close_move_to_grid_location_popup()
                 return None
             for g in range(len(self.grid_list)):
                 r, c, p_mm = self.grid_list[g]
@@ -1329,7 +1321,6 @@ class GuiMicroscope:
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
         move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))
         move_to_tile_popup.withdraw()
-        # close popup:
         def _close_move_to_tile_popup():
             move_to_tile_popup.withdraw()
             move_to_tile_popup.grab_release()
