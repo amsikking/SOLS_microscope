@@ -1327,21 +1327,15 @@ class GuiMicroscope:
         move_to_tile_popup = tk.Toplevel()
         move_to_tile_popup.title('Move to tile')
         x, y = self.root.winfo_x(), self.root.winfo_y() # center popup
-        move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))        
+        move_to_tile_popup.geometry("+%d+%d" % (x + 800, y + 400))
         move_to_tile_popup.withdraw()
-        # cancel popup:
-        def _cancel_move_to_tile():
+        # close popup:
+        def _close_move_to_tile_popup():
             move_to_tile_popup.withdraw()
             move_to_tile_popup.grab_release()
             return None
-        cancel_move_to_tile_button = tk.Button(
-            move_to_tile_popup,
-            text="Cancel",
-            command=_cancel_move_to_tile,
-            height=button_height,
-            width=button_width)
-        cancel_move_to_tile_button.grid(
-            row=1, column=0, padx=10, pady=10, sticky='n')
+        move_to_tile_popup.protocol(
+            "WM_DELETE_WINDOW", _close_move_to_tile_popup)
         # move to tile button:
         def _move_to_tile():
             move_to_tile_popup.deiconify()
@@ -1355,7 +1349,7 @@ class GuiMicroscope:
                 self._update_XY_stage_position(self.tile_list[tile][2])
                 self._snap_and_display()
                 self.current_tile = tile
-                _cancel_move_to_tile()
+                _close_move_to_tile_popup()
                 return None
             for t in range(len(self.tile_list)):
                 r, c, p_mm = self.tile_list[t]
