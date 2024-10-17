@@ -853,8 +853,6 @@ class GuiMicroscope:
         def _create_grid_popup():
             create_grid_popup.deiconify()
             create_grid_popup.grab_set() # force user to interact
-            # create a grid list and show user:
-            _create_grid()
             return None
         create_grid_popup_button = tk.Button(
             frame,
