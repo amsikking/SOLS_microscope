@@ -59,8 +59,6 @@ class Microscope:
         if self.verbose: print("%s: opening..."%self.name)
         self.unfinished_tasks = queue.Queue()
         # init hardware/software:
-        slow_fw_init = ct.ResultThread(
-            target=self._init_filter_wheel).start() #~5.3s
         slow_camera_init = ct.ResultThread(
             target=self._init_camera).start()       #~3.6s
         slow_lasers_init = ct.ResultThread(
@@ -71,15 +69,17 @@ class Microscope:
             target=self._init_focus_piezo).start()  #~0.6s
         slow_XY_stage_init = ct.ResultThread(
             target=self._init_XY_stage).start()     #~0.4s
+        slow_fw_init = ct.ResultThread(
+            target=self._init_filter_wheel).start() #~0.08s 
         self._init_display()                        #~1.3s
         self._init_datapreview()                    #~0.8s
         self._init_ao(ao_rate)                      #~0.2s
+        slow_fw_init.get_result()
         slow_XY_stage_init.get_result()
         slow_focus_init.get_result()
         slow_snoutfocus_init.get_result()
         slow_lasers_init.get_result()
         slow_camera_init.get_result()
-        slow_fw_init.get_result()
         # set defaults:
         # -> apply_settings args
         self.timestamp_mode = "binary+ASCII"
@@ -100,13 +100,6 @@ class Microscope:
         self.num_active_preview_buffers = 0
         self._settings_applied = False
         if self.verbose: print("\n%s: -> open and ready."%self.name)
-
-    def _init_filter_wheel(self):
-        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
-        self.filter_wheel = sutter_Lambda_10_3.Controller(
-            which_port='COM3', verbose=False)
-        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
-        atexit.register(self.filter_wheel.close)
 
     def _init_camera(self):
         if self.verbose: print("\n%s: opening camera..."%self.name)
@@ -147,6 +140,13 @@ class Microscope:
             which_port='COM5', verbose=False)
         if self.verbose: print("\n%s: -> XY stage open."%self.name)
         atexit.register(self.XY_stage.close)
+
+    def _init_filter_wheel(self):
+        if self.verbose: print("\n%s: opening filter wheel..."%self.name)
+        self.filter_wheel = sutter_Lambda_10_3.Controller(
+            which_port='COM3', verbose=False)
+        if self.verbose: print("\n%s: -> filter wheel open."%self.name)
+        atexit.register(self.filter_wheel.close)
 
     def _init_display(self):
         if self.verbose: print("\n%s: opening display..."%self.name)  
@@ -1111,4 +1111,4 @@ if __name__ == '__main__':
     scope.close()
 
     t1 = time.perf_counter()
-    print('time_s', t1 - t0) # ~ 9.5s
+    print('time_s', t1 - t0) # ~ 12.1s
